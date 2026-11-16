@@ -456,7 +456,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.5.1';
+const VERSION = '0.5.2';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -4237,6 +4237,22 @@ function ajustesNube(w) {
     h('h3', {}, 'Cuenta'), h('p', {}, NUBE.user.nombre + ' · ' + NUBE.user.email), h('button', { class: 'btn', onclick: () => FB.signOut() }, 'Cerrar sesión'));
 }
 
+/* Actualizar la app instalada: arrastrar hacia abajo la barra (inferior en el teléfono, o la de arriba) ≥ 70 px. Borra la copia guardada y recarga. */
+async function actualizarApp() {
+  try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.update())); } catch (_) { }
+  location.reload();
+}
+(function () {
+  let y0 = null, ind = null;
+  const asa = e => e.target.closest && e.target.closest('.rail,.top,.tb');
+  addEventListener('touchstart', e => { if (asa(e)) y0 = e.touches[0].clientY; }, { passive: true });
+  addEventListener('touchmove', e => {
+    if (y0 == null) return; const d = e.touches[0].clientY - y0;
+    if (d > 20) { if (!ind) { ind = document.createElement('div'); ind.style.cssText = 'position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:99999;background:#1b1f25;color:#c9a24b;border:1px solid #c9a24b;border-radius:20px;padding:6px 14px;font:12px sans-serif;letter-spacing:.1em'; document.body.append(ind); } ind.textContent = d >= 70 ? 'Soltá para actualizar' : 'Arrastrá para actualizar'; }
+  }, { passive: true });
+  addEventListener('touchend', e => { const d = y0 == null ? 0 : e.changedTouches[0].clientY - y0; y0 = null; ind?.remove(); ind = null; if (d >= 70) actualizarApp(); }, { passive: true });
+})();
+
 /* ===== navegación y vistas ===== */
 const Nav = {
   vista: 'atlas', ent: null, trans: null, edit: false, filtro: '', tipo: '', verTerminos: false, lista: false,
@@ -4812,6 +4828,7 @@ function vAjustes(root) {
     h('h3', {}, 'Versión para jugadores (archivo)'), h('p', {}, 'Genera un archivo .html aparte, sin notas del DM, sin fichas ocultas y con el mapa ya aplanado: las zonas sin explorar no viajan dentro del archivo. Usa la sesión actual (' + S.ses + ') y solo las transcripciones marcadas como compartidas.'),
     h('button', { class: 'btn pri', onclick: exportarJugadores }, 'Generar versión para jugadores'),
     h('div', { class: 'aviso' }, 'El botón Grupo/DM de arriba sirve para ensayar lo que ven los jugadores, pero no protege nada: este archivo contiene todo. Para la mesa usá el archivo de jugadores.'),
+    h('h3', {}, 'Actualizar la app'), h('p', {}, 'En el teléfono también podés arrastrar hacia abajo la barra de abajo. Borra la copia guardada y baja la última versión.'), h('button', { class: 'btn', onclick: actualizarApp }, 'Buscar actualización'),
     h('h3', {}, 'Créditos y licencias'),
     h('label', { class: 'sw' }, h('input', { type: 'checkbox', checked: !(S.ajustes || {}).sinImgOf, onchange: ev => { S.ajustes = S.ajustes || {}; S.ajustes.sinImgOf = !ev.target.checked; guardar(); } }), 'Mostrar ilustraciones oficiales de monstruos (se cargan de internet)'),
     h('p', {}, 'Relieve del mapa: «Fantasy Map Assets Pack Lite» de Amanz, licencia CC BY 4.0 (amanz.itch.io/fantasy-map-assets-pack-lite). Tipografías Cinzel, EB Garamond y Marcellus, licencia SIL Open Font. Marca de Růnica: manual de marca propio.'),
