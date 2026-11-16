@@ -417,6 +417,13 @@ details.ed-mas>summary{font-size:13px}
 @media(max-width:820px){.kanban{grid-template-columns:1fr}.oro{grid-template-columns:repeat(2,1fr)}.xpage{padding:14px 12px 80px}.gal{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}}
 .nota.nat20 span:nth-child(2){color:var(--latón2);text-shadow:0 0 12px #d4af3799}.nota.nat20 .hora:after{content:" ✦";color:var(--latón)}
 
+.instalar{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(560px,calc(100% - 24px));display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--latón);border-radius:10px;padding:12px 14px;z-index:90;box-shadow:var(--sombra)}
+.instalar img{width:38px;height:38px;border-radius:8px}
+.instalar .it{flex:1 1 200px;display:flex;flex-direction:column;gap:2px;font-size:14px;color:var(--txt2)}
+.instalar .it b{color:var(--txt);font-family:var(--f-label);letter-spacing:.04em}
+@media (prefers-reduced-motion:no-preference){.instalar{animation:instsube .35s ease-out}}
+@keyframes instsube{from{opacity:0;transform:translate(-50%,16px)}to{opacity:1;transform:translateX(-50%)}}
+
 </style>
 </head>
 <body>
@@ -552,7 +559,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.8.2';
+const VERSION = '0.8.3';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -4211,8 +4218,32 @@ function pantallaMensaje(txt, extra) {
   app.append(h('div', { class: 'login' }, h('img', { src: MARCA.logo, alt: 'Růnica' }), h('p', {}, txt), extra || null,
     h('button', { class: 'btn', onclick: () => FB.signOut() }, 'Cerrar sesión (' + (NUBE.user ? NUBE.user.email : '') + ')')));
 }
+
+/* ---------- Cartel "Instalar Růnica" (PWA) ----------
+   Android/escritorio: usa el aviso nativo (beforeinstallprompt). iPhone/iPad: Safari no lo tiene, así que explica el gesto. Se puede cerrar; vuelve a los 14 días. */
+let _pedirInstalar = null;
+function _lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+function _lsSet(k, v) { try { localStorage.setItem(k, v); } catch (_) { } }
+function yaInstalada() { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+function cartelInstalar() {
+  if (yaInstalada() || document.querySelector('.instalar')) return;
+  const t = +_lsGet('runica.instalar.no') || 0; if (Date.now() - t < 14 * 864e5) return;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!_pedirInstalar && !ios) return;
+  const cerrar = () => { _lsSet('runica.instalar.no', String(Date.now())); c.remove(); };
+  const c = h('div', { class: 'instalar', role: 'dialog', 'aria-label': 'Instalar Růnica' },
+    h('img', { src: MARCA.apple, alt: '' }),
+    h('div', { class: 'it' }, h('b', {}, 'Instalá Růnica'),
+      h('span', {}, ios ? 'Tocá Compartir y después «Agregar a pantalla de inicio». Así abre más rápido y podés recibir avisos.' : 'Se abre como una app, anda sin internet y podés recibir avisos de la mesa.')),
+    ios ? null : h('button', { class: 'btn pri', onclick: async () => { const p = _pedirInstalar; _pedirInstalar = null; try { p.prompt(); await p.userChoice; } catch (_) { } c.remove(); } }, 'Instalar'),
+    h('button', { class: 'btn', 'aria-label': 'Ahora no', onclick: cerrar }, 'Ahora no'));
+  document.body.append(c);
+}
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); _pedirInstalar = e; setTimeout(cartelInstalar, 2500); });
+window.addEventListener('appinstalled', () => { _pedirInstalar = null; document.querySelector('.instalar')?.remove(); });
 async function nubeIniciar() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
+  setTimeout(cartelInstalar, 6000);
   FB.onAuthStateChanged(async u => {
     if (!u) { NUBE.user = null; NUBE.unsub?.(); NUBE.unsub = null; pantallaLogin(); return; }
     $('#app').innerHTML = '<div class="login"><p>Entrando…</p></div>';
