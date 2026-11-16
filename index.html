@@ -552,7 +552,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.8.0';
+const VERSION = '0.8.1';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -5688,8 +5688,26 @@ function buscador() {
 window.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); buscar(); } });
 
 /* ---------- varias campañas ---------- */
+function parcheApellidos() {
+  if (!S.ents || (S.parches || []).includes('apellidos-081')) return;
+  const g = id => S.ents.find(x => x.id === id);
+  const d = g('dieter'), r = g('ront'), sv = g('sven'), nb = g('nabi');
+  if (!d || !r || !sv) return;
+  const poner = (e, nombre, corto, err = []) => {
+    if (!e || e.nombre !== corto) return;
+    e.alias = [...new Set([...(e.alias || []), corto])]; e.nombre = nombre;
+    e.errores = [...new Set([...(e.errores || []), ...err])];
+  };
+  poner(r, 'Ront Ulgër', 'Ront', ['Ront Ülger', 'Ront Ulger']);
+  poner(sv, 'Sven Ulgër', 'Sven', ['Sven Ülger', 'Sven Ulger']);
+  poner(nb, 'Nabi Xandrier', 'Nabi');
+  d.errores = [...new Set([...(d.errores || []), 'Dieter Ülger', 'Dieter Ulger', 'Ülger', 'Ulger'])];
+  if (!g('familia-ulger')) S.ents.push({ id: 'familia-ulger', tipo: 'faccion', nombre: 'Familia Ulgër', alias: ['los Ulgër'], errores: ['Familia Ülger', 'Familia Ulger'], ficha: true, padre: null, vis: 'todos', resumen: 'Familia de Sven, con origen en Nevandor. Sven adoptó a Ront como hijo.', cuerpo: '', rel: [] });
+  for (const e of [d, r, sv]) { e.rel = e.rel || []; if (!e.rel.some(x => x.d === 'familia-ulger')) e.rel.push({ t: 'miembro de', d: 'familia-ulger' }); }
+  (S.parches = S.parches || []).push('apellidos-081');
+}
 function prepararEstado() {
-  asegurarExtras();
+  asegurarExtras(); parcheApellidos();
   for (const [id, im] of Object.entries(typeof RETRATOS === 'object' ? RETRATOS : {})) { const x = S.ents.find(y => y.id === id && y.tipo === 'personaje'); if (x && !x.imagen && !x.retratoQuitado) x.imagen = im; }
   if (!S.ignoradas) S.ignoradas = []; if (!S.trans) S.trans = []; if (!S.ajustes) S.ajustes = {};
   for (const x of S.ents) if (x.tipo === 'criatura' && !x.ficha && (x.resumen || x.cuerpo)) x.ficha = true; if (!S.tiempo) S.tiempo = tiempoInicial();
