@@ -552,7 +552,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.8.1';
+const VERSION = '0.8.2';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -4341,14 +4341,31 @@ async function actualizarApp() {
   location.reload();
 }
 (function () {
-  let y0 = null, ind = null;
+  let y0 = null, ind = null, ap = null;
   const asa = e => e.target.closest && e.target.closest('.rail,.top,.tb');
-  addEventListener('touchstart', e => { if (asa(e)) y0 = e.touches[0].clientY; }, { passive: true });
+  const mover = px => { ap.style.transform = px ? 'translateY(' + px + 'px)' : ''; if (ind) { ind.style.opacity = Math.min(1, px / 50); ind.firstChild.style.transform = 'rotate(' + (px * 4) + 'deg)'; } };
+  addEventListener('touchstart', e => { if (asa(e)) { y0 = e.touches[0].clientY; ap = document.getElementById('app'); } }, { passive: true });
   addEventListener('touchmove', e => {
-    if (y0 == null) return; const d = e.touches[0].clientY - y0;
-    if (d > 20) { if (!ind) { ind = document.createElement('div'); ind.style.cssText = 'position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:99999;background:#1b1f25;color:#c9a24b;border:1px solid #c9a24b;border-radius:20px;padding:6px 14px;font:12px sans-serif;letter-spacing:.1em'; document.body.append(ind); } ind.textContent = d >= 70 ? 'Soltá para actualizar' : 'Arrastrá para actualizar'; }
+    if (y0 == null || !ap) return; const d = e.touches[0].clientY - y0;
+    if (d <= 0) { mover(0); return; }
+    if (!ind) {
+      ap.style.transition = 'none'; ap.style.position = 'relative'; ap.style.zIndex = '1'; ap.style.background = 'var(--bg)';
+      ind = document.createElement('div');
+      ind.style.cssText = 'position:fixed;left:0;right:0;top:0;height:80px;display:flex;align-items:center;justify-content:center;z-index:0;color:#e6c866;font-size:26px;opacity:0;pointer-events:none';
+      ind.innerHTML = '<span style="display:inline-block">↻</span>'; document.body.append(ind);
+    }
+    mover(Math.min(110, d * 0.55));
   }, { passive: true });
-  addEventListener('touchend', e => { const d = y0 == null ? 0 : e.changedTouches[0].clientY - y0; y0 = null; ind?.remove(); ind = null; if (d >= 70) actualizarApp(); }, { passive: true });
+  const soltar = async e => {
+    if (y0 == null) return; const d = e.changedTouches ? e.changedTouches[0].clientY - y0 : 0; y0 = null;
+    if (!ap) return; ap.style.transition = 'transform .28s cubic-bezier(.2,.8,.3,1)';
+    if (d * 0.55 >= 40 && e.type === 'touchend') {
+      mover(56); if (ind) ind.firstChild.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], { duration: 700, iterations: Infinity });
+      await actualizarApp();
+    } else { mover(0); setTimeout(() => { ind?.remove(); ind = null; if (ap) { ap.style.transition = ''; ap.style.position = ap.style.zIndex = ap.style.background = ''; } }, 300); }
+  };
+  addEventListener('touchend', soltar, { passive: true });
+  addEventListener('touchcancel', soltar, { passive: true });
 })();
 
 /* ===== Wiki asistida: lore oficial, capas mesa/oficial, contradicciones, plantillas, propuestas,
