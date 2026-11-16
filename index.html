@@ -343,6 +343,19 @@ a.rota{color:var(--brasa)}
 @media(max-width:700px){.top .btn.rev .rev-n{font-size:11px}}
 @media(max-width:440px){.top{gap:4px}.top h1{display:none}.top select{max-width:80px}.top .btn{padding:7px 7px}.top .seg button{padding:6px 7px;letter-spacing:.02em}.top button.camp{max-width:78px}}
 .top .seg,.top .btn,.top select{flex-shrink:0}.top button.camp{flex-shrink:1;min-width:0}
+/* simplificación v0.7 */
+.main.contabs{display:grid;grid-template-rows:auto minmax(0,1fr)}.vbody{position:relative;min-height:0;height:100%;overflow:hidden}
+.subtabs{display:flex;gap:4px;padding:8px 14px;border-bottom:1px solid var(--linea);background:var(--bg2);overflow-x:auto}
+.subtabs button{padding:6px 14px;border-radius:20px;font-family:var(--f-label);font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--mut);white-space:nowrap}
+.subtabs button.on{color:var(--latón2);background:var(--panel2);box-shadow:inset 0 0 0 1px var(--linea2)}
+.top .chip.modo{cursor:pointer;border-color:var(--latón);color:var(--latón2);font-size:11px}
+.top .btn.mas{position:relative}.top .btn.mas .rev-n{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;line-height:18px;padding:0 5px;border-radius:9px;background:var(--latón);color:#0e1013;font-size:11px;font-family:var(--f-label)}
+.ov-menu .dlg{width:min(380px,92vw)}.menu .seg{display:flex;margin-bottom:6px}.menu select{width:100%}
+.menu-l{display:grid;margin-top:12px;border-top:1px solid var(--linea)}.menu-it{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;padding:12px 4px;border-bottom:1px solid var(--linea);color:var(--txt);font-size:15px}
+.menu-it small{color:var(--mut);font-size:12.5px}.menu-it:hover{color:var(--latón2)}.menu-it.peligro{color:#e08a6a}
+details.ed-mas{margin-top:16px;border:1px solid var(--linea);border-radius:var(--r);padding:4px 12px 10px}details.ed-mas>summary{cursor:pointer;padding:8px 0 4px;font-family:var(--f-label);font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--latón2)}
+details.rev-sug{margin-top:24px}details.rev-sug>summary{cursor:pointer;color:var(--mut);font-family:var(--f-label);letter-spacing:.08em}
+@media(max-width:820px){.subtabs{padding:6px 8px}.subtabs button{padding:6px 10px;font-size:11px}.top .btn.mas{padding:7px 9px}}
 
 </style>
 </head>
@@ -479,7 +492,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.6.1';
+const VERSION = '0.7.0';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -4213,6 +4226,7 @@ async function abrirNube(cid) {
     }
   } catch (e) { pantallaMensaje('No pude abrir la campaña (' + (e.code || e.message) + ').'); return; }
   invalidarIdx(); await arrancar();
+  if (NUBE.rol === 'dm') cargarPreguntas().then(actualizarBadge);
   NUBE.unsub = escuchar(NUBE.rol === 'dm' ? 'dm' : 'jug');
 }
 function escuchar(k) {
@@ -4558,7 +4572,8 @@ function restaurarPapelera(i) {
 let _rev = null;
 function pendientes() {
   if (_rev && _rev.S === S && _rev.n === _genGuardado) return _rev.l;
-  const l = [], ign = new Set(S.revIgn || []), add = (k, grupo, e, txt, acc) => { if (!ign.has(k)) l.push({ k, grupo, e, txt, acc }); };
+  const URG = ['Choca con el lore oficial', 'Mencionados sin ficha', 'Nombres nuevos en transcripciones'];
+  const l = [], ign = new Set(S.revIgn || []), add = (k, grupo, e, txt, acc) => { if (!ign.has(k)) l.push({ k, grupo, e, txt, acc, urg: URG.includes(grupo) }); };
   for (const e of S.ents) {
     contradicciones(e).forEach(c => add('c:' + e.id + c.key, 'Choca con el lore oficial', e, e.nombre + ' ' + c.r.t + ' ' + c.d.nombre));
     if (e.ficha && e.tipo !== 'personaje' && (!e.resumen?.trim() || (e.cuerpo || '').trim().length < 40)) add('i:' + e.id, 'Fichas flacas', e, !e.resumen?.trim() ? 'Sin resumen de una línea' : 'Descripción muy corta');
@@ -4577,19 +4592,21 @@ async function cargarPreguntas() { if (!NUBE.on || NUBE.rol !== 'dm' || !NUBE.ci
 function vRevisar(root) {
   const w = h('div', { class: 'ses revisar' }), l = pendientes(), grupos = new Map();
   l.forEach(x => { if (!grupos.has(x.grupo)) grupos.set(x.grupo, []); grupos.get(x.grupo).push(x); });
-  w.append(h('p', { class: 'res' }, l.length ? 'Lo que conviene mirar para que la wiki quede al día. "Listo" lo saca de la lista.' : 'Nada pendiente. La wiki está al día.'));
+  w.append(h('p', { class: 'res' }, l.some(x => x.urg) ? 'Lo que conviene mirar para que la wiki quede al día. "Listo" lo saca de la lista.' : 'Nada urgente. La wiki está al día.'));
   const preg = h('div'); w.append(preg);
   const pintarPreg = ps => { preg.innerHTML = ''; if (!ps?.length) return; preg.append(h('h3', {}, 'Lo que preguntaron los jugadores · ' + ps.length), ps.map(p => h('div', { class: 'sug' }, h('div', { class: 'f' }, '¿Quién es «' + p.q + '»?'), h('div', { class: 'm' }, p.quien + ' · ' + fechaCorta(p.t)),
     h('div', { class: 'a' }, h('button', { class: 'btn sm pri', onclick: async () => { const e = buscarEnt(p.q) || altaTermino(p.q, 'pnj'); await FB.deleteDoc(FB.doc('campanas', NUBE.cid, 'preg', p.id)); e.ficha = true; guardar(); Nav.ent = e.id; Nav.edit = true; Nav.ir('fichas'); } }, 'Responder con ficha'),
       h('button', { class: 'btn sm', onclick: async () => { await FB.deleteDoc(FB.doc('campanas', NUBE.cid, 'preg', p.id)); pintarPreg(_preg = _preg.filter(x => x.id !== p.id)); actualizarBadge(); } }, 'Borrar'))))); };
   if (_preg) pintarPreg(_preg); cargarPreguntas().then(ps => { pintarPreg(ps); actualizarBadge(); });
-  for (const [g, xs] of grupos) w.append(h('h3', {}, g + ' · ' + xs.length), xs.slice(0, 40).map(x => h('div', { class: 'sug' }, h('div', { class: 'f' }, x.e ? h('a', { class: 'term', onclick: () => Nav.ir('fichas', x.e.id) }, x.e.nombre) : x.txt.split(' · ')[0]), h('div', { class: 'm' }, x.e ? x.txt : x.txt.split(' · ').slice(1).join(' · ')),
+  const sug = h('details', { class: 'rev-sug' }, h('summary', {}, 'Sugerencias para mejorar fichas · ' + l.filter(x => !x.urg).length));
+  for (const [g, xs] of grupos) (xs[0].urg ? w : sug).append(h('h3', {}, g + ' · ' + xs.length), ...xs.slice(0, 40).map(x => h('div', { class: 'sug' }, h('div', { class: 'f' }, x.e ? h('a', { class: 'term', onclick: () => Nav.ir('fichas', x.e.id) }, x.e.nombre) : x.txt.split(' · ')[0]), h('div', { class: 'm' }, x.e ? x.txt : x.txt.split(' · ').slice(1).join(' · ')),
     h('div', { class: 'a' }, x.acc ? h('button', { class: 'btn sm pri', onclick: x.acc }, g.startsWith('Lore') ? 'Actualizar' : 'Crear') : x.e ? h('button', { class: 'btn sm pri', onclick: () => { Nav.ent = x.e.id; Nav.edit = true; Nav.ir('fichas'); } }, 'Editar') : null,
       h('button', { class: 'btn sm', onclick: () => { if (x.k.startsWith('n:')) S.ignoradas.push(x.k.slice(2)); else S.revIgn = [...(S.revIgn || []), x.k]; guardar(); render(); } }, x.k.startsWith('n:') ? 'No es' : 'Listo')))));
+  if (l.some(x => !x.urg)) w.append(sug);
   if (S.papelera?.length) w.append(h('h3', {}, 'Papelera · ' + S.papelera.length), S.papelera.map((x, i) => [x, i]).reverse().map(([x, i]) => h('div', { class: 'sug' }, h('div', { class: 'f' }, x.e.nombre), h('div', { class: 'm' }, 'Eliminada el ' + fechaCorta(x.t) + ' · ' + x.quien), h('div', { class: 'a' }, h('button', { class: 'btn sm', onclick: () => restaurarPapelera(i) }, 'Recuperar')))));
   root.append(h('div', { class: 'col', style: { height: '100%' } }, w));
 }
-function actualizarBadge() { const b = document.querySelector('.top .rev-n'); if (b) { const n = pendientes().length + (_preg?.length || 0); b.textContent = n; b.parentElement.classList.toggle('hay', n > 0); } }
+function actualizarBadge() { const b = document.querySelector('.top .btn.mas'); if (!b || !esDM()) return; const n = nRevisar(); b.classList.toggle('hay', n > 0); let s = b.querySelector('.rev-n'); if (!n) { s?.remove(); return; } if (!s) { s = document.createElement('span'); s.className = 'rev-n'; b.append(s); } s.textContent = n; }
 
 /* ---------- 6. "Previously on…" ---------- */
 function recap(s) {
@@ -4634,33 +4651,49 @@ const Nav = {
   hoja: null,
   irHoja(k, hash) { this.hoja = k ? { k, hash: hash || '' } : null; this.vista = 'hojas'; render(); }
 };
-const VISTAS = [
-  ['atlas', 'Atlas', 'mapa'], ['fichas', 'Fichas', 'libro'], ['glosario', 'Glosario', 'glos'], ['textos', 'Textos', 'pergamino'],
-  ['relaciones', 'Vínculos', 'grafo'], ['tiempo', 'Tiempo', 'reloj'], ['sesiones', 'Sesiones', 'sesion'], ['hojas', 'Hojas', 'hoja'], ['ajustes', 'Ajustes', 'ajustes']
-];
+const VISTAS = [['atlas', 'Atlas', 'mapa'], ['fichas', 'Fichas', 'libro'], ['sesiones', 'Sesiones', 'sesion'], ['hojas', 'Hojas', 'hoja'], ['ajustes', 'Ajustes', 'ajustes']];
 const TITULOS = { atlas: 'Atlas', fichas: 'Fichas', glosario: 'Glosario', textos: 'Transcripciones', relaciones: 'Vínculos', tiempo: 'Tiempo', sesiones: 'Sesiones', hojas: 'Hojas de combate', ajustes: 'Ajustes', revisar: 'Por revisar' };
 
 function acercaDe() {
   modal('Acerca de Růnica', h('div', { class: 'acerca' }, h('img', { src: MARCA.logo, alt: 'Růnica' }), h('p', { class: 'codex' }, '— Campaign Codex —'), h('p', {}, 'Códice de campaña para D&D · versión ' + VERSION), h('p', {}, 'Campaña: ' + S.campana.nombre), h('p', { style: { fontSize: '13px', color: 'var(--mut)' } }, 'Todo se guarda en este dispositivo y funciona sin internet.')), [{ txt: 'Cerrar', pri: true }]);
 }
+const GRUPOS = { fichas: [['fichas', 'Fichas'], ['glosario', 'Glosario'], ['relaciones', 'Vínculos']], sesiones: [['sesiones', 'Sesiones'], ['tiempo', 'Tiempo'], ['textos', 'Transcripciones']] };
+const grupoDe = v => Object.keys(GRUPOS).find(g => GRUPOS[g].some(x => x[0] === v)) || v;
+const ICO = (d, txt) => `<svg viewBox="0 0 24 24" width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:1.6"><path d="${d}"/></svg>` + (txt ? ' ' + txt : '');
+const puedeEditar = () => !SOLO_LECTURA;
+const DOTS = '<svg viewBox="0 0 24 24" width="18" height="16" style="fill:currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
+function nRevisar() { return pendientes().filter(x => x.urg).length + (_preg?.length || 0); }
+function menuMas() {
+  const caja = h('div', { class: 'menu' });
+  if (puedeEditar()) {
+    caja.append(h('label', { class: 'lab' }, 'Sesión en juego'), h('select', { onchange: e => { S.ses = +e.target.value; guardar(); render(); } }, S.sesiones.map(s => h('option', { value: s.n, selected: s.n === S.ses }, 'Sesión ' + s.n + (s.titulo ? ' · ' + s.titulo : '')))),
+      h('label', { class: 'lab f' }, 'Ver como'), h('div', { class: 'seg ' + (S.modo === 'dm' ? 'dm' : '') }, [['grupo', 'Grupo'], ['dm', 'DM']].map(([v, n]) => h('button', { 'data-v': v, class: S.modo === v ? 'on' : '', onclick: () => { S.modo = v; guardar(); ov.cerrar(); render(); } }, n))));
+    const it = (txt, sub, fn) => h('button', { class: 'menu-it', onclick: () => { ov.cerrar(); fn(); } }, h('span', {}, txt), sub ? h('small', {}, sub) : null);
+    caja.append(h('div', { class: 'menu-l' }, S.modo === 'dm' ? it('Por revisar', nRevisar() ? nRevisar() + ' pendientes' : 'Todo al día', () => Nav.ir('revisar')) : null,
+      NUBE.on && NUBE.rol === 'dm' ? it('Publicar para jugadores', 'Ven la sesión ' + S.ses, nubePublicar) : null, it('Acerca de Růnica', 'v' + VERSION, acercaDe)));
+  } else caja.append(h('p', { class: 'tag-ro' }, 'Versión para jugadores · sesión ' + S.ses), h('div', { class: 'menu-l' }, h('button', { class: 'menu-it', onclick: () => { ov.cerrar(); acercaDe(); } }, h('span', {}, 'Acerca de Růnica'), h('small', {}, 'v' + VERSION))));
+  const ov = modal('', caja, [{ txt: 'Cerrar' }]); ov.classList.add('ov-menu');
+}
+function buscar() { if (esDM()) buscador(); else quienEs(); }
 function render() {
   Atlas.desmontar?.();
   const pv = Nav.vista === 'fichas' && Nav._pv === 'fichas' ? document.querySelector('.split .pane') : null, pst = pv ? pv.scrollTop : 0; Nav._pv = Nav.vista;
   const app = $('#app'); app.innerHTML = '';
+  const g = grupoDe(Nav.vista);
   const rail = h('nav', { class: 'rail' }, h('div', { class: 'logo', title: 'Růnica · ' + S.campana.nombre, style: { backgroundImage: 'url(' + MARCA.insignia + ')' }, onclick: acercaDe }),
-    VISTAS.filter(v => !(SOLO_LECTURA && v[0] === 'ajustes') && !(v[0] === 'hojas' && !S.conHojas)).map(([id, nom, ic]) => h('button', { class: Nav.vista === id ? 'on' : '', onclick: () => Nav.ir(id), html: `<svg viewBox="0 0 24 24"><path d="${ICON[ic]}"/></svg><span>${nom}</span>` })));
-  const top = h('header', { class: 'top' }, h('h1', {}, TITULOS[Nav.vista]), (SOLO_LECTURA && !NUBE.on ? h('span', { class: 'camp' }, S.campana.nombre) : h('button', { class: 'camp', title: 'Cambiar de campaña', onclick: selectorCampana }, S.campana.nombre + ' ▾')), h('span', { class: 'grow' }),
-    NUBE.on && NUBE.rol === 'dm' ? h('button', { class: 'btn', title: 'Publicar a los jugadores', onclick: nubePublicar, html: '<svg viewBox="0 0 24 24" width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:1.6"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg> Publicar' }) : null,
-    SOLO_LECTURA ? h('span', { class: 'tag-ro' }, 'Versión para jugadores · sesión ' + S.ses) : [
-      h('select', { style: { width: 'auto' }, title: 'Sesión en juego', onchange: e => { S.ses = +e.target.value; guardar(); render(); } }, S.sesiones.map(s => h('option', { value: s.n, selected: s.n === S.ses }, 'Sesión ' + s.n))),
-      h('div', { class: 'seg ' + (S.modo === 'dm' ? 'dm' : '') }, [['grupo', 'Grupo'], ['dm', 'DM']].map(([v, n]) => h('button', { 'data-v': v, class: S.modo === v ? 'on' : '', onclick: () => { S.modo = v; guardar(); render(); } }, n)))],
-    esDM() ? h('button', { class: 'btn rev', title: 'Lo pendiente para mantener la wiki al día', onclick: () => Nav.ir('revisar'), html: '<svg viewBox="0 0 24 24" width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:1.6"><path d="M4 6l2 2 3-3M4 13l2 2 3-3M12 7h8M12 14h8M4 20h16"/></svg> Revisar <span class="rev-n"></span>' }) : h('button', { class: 'btn', title: 'Buscá a alguien o algo de la campaña', onclick: () => quienEs(), html: '<svg viewBox="0 0 24 24" width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:1.6"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg> ¿Quién es?' }),
-    h('button', { class: 'btn', title: 'Buscar (Ctrl+K)', onclick: buscador, html: '<svg viewBox="0 0 24 24" width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:1.6"><circle cx="11" cy="11" r="6"/><path d="M16 16l5 5"/></svg> Buscar' }));
-  const main = h('main', { class: 'main', id: 'vista' });
+    VISTAS.filter(v => !(SOLO_LECTURA && v[0] === 'ajustes') && !(v[0] === 'hojas' && !S.conHojas)).map(([id, nom, ic]) => h('button', { class: g === id ? 'on' : '', onclick: () => Nav.ir(GRUPOS[id] ? (Nav['ult_' + id] || id) : id), html: `<svg viewBox="0 0 24 24"><path d="${ICON[ic]}"/></svg><span>${nom}</span>` })));
+  const n = esDM() ? nRevisar() : 0;
+  const top = h('header', { class: 'top' }, h('h1', {}, TITULOS[g] || TITULOS[Nav.vista]), (SOLO_LECTURA && !NUBE.on ? h('span', { class: 'camp' }, S.campana.nombre) : h('button', { class: 'camp', title: 'Cambiar de campaña', onclick: selectorCampana }, S.campana.nombre + ' ▾')),
+    puedeEditar() && S.modo === 'grupo' ? h('span', { class: 'chip modo', title: 'Estás viendo lo que ve el grupo', onclick: () => { S.modo = 'dm'; guardar(); render(); } }, 'Vista grupo') : null, h('span', { class: 'grow' }),
+    h('button', { class: 'btn', title: esDM() ? 'Buscar (Ctrl+K)' : '¿Quién es…? Buscá a alguien o algo', onclick: buscar, html: ICO('M16 16l5 5M11 17a6 6 0 1 0 0-12 6 6 0 0 0 0 12z', 'Buscar') }),
+    h('button', { class: 'btn mas' + (n ? ' hay' : ''), title: 'Más opciones', onclick: menuMas, html: DOTS + (n ? `<span class="rev-n">${n}</span>` : '') }));
+  const tabs = GRUPOS[g] ? h('div', { class: 'subtabs' }, GRUPOS[g].filter(([v]) => !(v === 'textos' && !esDM() && !S.trans.some(t => t.compartir))).map(([v, nom]) => h('button', { class: Nav.vista === v ? 'on' : '', onclick: () => Nav.ir(v) }, nom))) : null;
+  if (GRUPOS[g]) Nav['ult_' + g] = Nav.vista;
+  const cuerpo = h('div', { class: 'vbody', id: 'vista' });
+  const main = h('main', { class: 'main' + (tabs ? ' contabs' : '') }, tabs, cuerpo);
   app.append(h('div', { class: 'shell' }, rail, top, main));
-  ({ atlas: vAtlas, fichas: vFichas, glosario: vGlosario, textos: vTextos, relaciones: vGrafo, tiempo: vTiempo, sesiones: vSesiones, hojas: vHojas, ajustes: vAjustes, revisar: vRevisar })[S.conHojas || Nav.vista !== 'hojas' ? Nav.vista : 'atlas'](main);
+  ({ atlas: vAtlas, fichas: vFichas, glosario: vGlosario, textos: vTextos, relaciones: vGrafo, tiempo: vTiempo, sesiones: vSesiones, hojas: vHojas, ajustes: vAjustes, revisar: vRevisar })[S.conHojas || Nav.vista !== 'hojas' ? Nav.vista : 'atlas'](cuerpo);
   if (pst) { const np = document.querySelector('.split .pane'); if (np) np.scrollTop = pst; }
-  if (esDM()) setTimeout(actualizarBadge, 0);
 }
 
 /* ---------- Atlas ---------- */
@@ -4677,10 +4710,7 @@ function vFichas(root) {
   const q = norm(Nav.filtro);
   const buscar = h('input', { type: 'search', placeholder: 'Filtrar fichas…', value: Nav.filtro, oninput: e => { Nav.filtro = e.target.value; const p = e.target.selectionStart; render(); const n = $('.pane input'); n.focus(); n.setSelectionRange(p, p); } });
   const tipoSel = h('select', { onchange: e => { Nav.tipo = e.target.value; render(); } }, h('option', { value: '' }, 'Todos los tipos'), Object.entries(TIPOS).map(([k, v]) => h('option', { value: k, selected: Nav.tipo === k }, v)));
-  pane.append(h('div', { style: { padding: '12px 12px 4px', display: 'grid', gap: '8px' } }, buscar, tipoSel,
-    h('div', { style: { display: 'flex', gap: '8px', justifyContent: 'space-between', alignItems: 'center' } },
-      h('label', { class: 'tgl', style: { fontSize: '13px' } }, h('input', { type: 'checkbox', checked: Nav.verTerminos, onchange: e => { Nav.verTerminos = e.target.checked; render(); } }), 'Incluir términos sin ficha'),
-      esDM() ? h('button', { class: 'btn sm pri', onclick: () => nuevaEntidad() }, '+ Ficha') : null)));
+  pane.append(h('div', { style: { padding: '12px 12px 4px', display: 'grid', gap: '8px' } }, h('div', { style: { display: 'flex', gap: '8px' } }, buscar, esDM() ? h('button', { class: 'btn pri', title: 'Nueva ficha', onclick: () => nuevaEntidad() }, '+') : null), tipoSel));
   const coincide = e => (!Nav.tipo || e.tipo === Nav.tipo) && (e.ficha || Nav.verTerminos) && (!q || [e.nombre, ...(e.alias || []), ...(e.errores || [])].some(t => norm(t).includes(q)));
   const lista = h('div', { class: 'tree' });
   const fila = (e, nivel = 0, tg = '') => h('div', { class: 'it' + (cur?.id === e.id ? ' on' : '') + (e.ficha ? '' : ' nofi') + (e.vis === 'dm' ? ' sec' : ''), style: { paddingLeft: 8 + nivel * 16 + 'px' }, onclick: () => { Nav.ent = e.id; Nav.edit = false; Nav.lista = false; render(); } },
@@ -4735,7 +4765,8 @@ function fichaVista(e) {
   const acc = h('div', { class: 'bloque', style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } });
   if (pin && S.mapa) acc.append(h('button', { class: 'btn', onclick: () => { Atlas.pendiente = { x: pin.x, y: pin.y }; Atlas.sel = { tipo: 'pin', id: pin.id }; Nav.ir('atlas'); } }, 'Ver en el atlas'));
   if (S.conHojas && e.tipo === 'personaje' && HOJA_PJ[e.id]) acc.append(h('button', { class: 'btn', onclick: () => Nav.irHoja(e.id + '.html') }, 'Hoja de combate'), h('button', { class: 'btn', onclick: () => Nav.irHoja(e.id + '-dossier.html') }, 'Dossier'));
-  if (dm) acc.append(h('button', { class: 'btn pri', onclick: () => { Nav.edit = true; render(); } }, e.ficha ? 'Editar ficha' : 'Crear ficha'), h('button', { class: 'btn', onclick: () => historial(e) }, 'Historial' + (S.hist?.[e.id]?.length ? ' (' + S.hist[e.id].length + ')' : '')), e.lore ? null : h('button', { class: 'btn', onclick: () => elegirLore(e) }, 'Lore oficial'), h('button', { class: 'btn peligro', onclick: () => borrarEntidad(e) }, 'Eliminar'));
+  if (dm) acc.prepend(h('button', { class: 'btn pri', onclick: () => { Nav.edit = true; render(); } }, e.ficha ? 'Editar' : 'Crear ficha'));
+  if (dm) acc.append(h('button', { class: 'btn', title: 'Más acciones', onclick: () => { const it = (t, f, c) => h('button', { class: 'menu-it' + (c ? ' peligro' : ''), onclick: () => { ov.cerrar(); f(); } }, h('span', {}, t)); const ov = modal(e.nombre, h('div', { class: 'menu-l' }, it('Historial de cambios' + (S.hist?.[e.id]?.length ? ' (' + S.hist[e.id].length + ')' : ''), () => historial(e)), it(e.lore ? 'Cambiar página del lore oficial' : 'Buscar lore oficial', () => elegirLore(e)), it('Eliminar ficha', () => borrarEntidad(e), 1)), [{ txt: 'Cerrar' }]); ov.classList.add('ov-menu'); }, html: DOTS }));
   if (acc.children.length) el.append(acc);
   return el;
 }
@@ -4909,9 +4940,14 @@ function editorFicha(e) {
   let rels = clonar(e.rel || []); let img = e.imagen || '';
   const relBox = h('div'); const pintarRels = () => { relBox.innerHTML = ''; rels.forEach((r, i) => relBox.append(h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1.3fr auto', gap: '6px', marginBottom: '6px' } }, h('input', { type: 'text', value: r.t, placeholder: 'hermano de, dirige, vive en…', oninput: ev => r.t = ev.target.value }), h('select', { onchange: ev => r.d = ev.target.value }, S.ents.filter(x => x.id !== e.id).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(x => h('option', { value: x.id, selected: x.id === r.d }, x.nombre))), h('button', { class: 'btn sm', onclick: () => { rels.splice(i, 1); pintarRels(); } }, '×')))); }; pintarRels();
   const imgBox = h('div'); const pintarImg = () => { imgBox.innerHTML = ''; if (img) imgBox.append(h('img', { src: img, style: { maxWidth: '160px', borderRadius: '6px', display: 'block', marginBottom: '6px' } })); imgBox.append(h('label', { class: 'btn sm' }, img ? 'Cambiar retrato' : 'Subir retrato', h('input', { type: 'file', accept: 'image/*', class: 'hide', onchange: async ev => { const fi = ev.target.files[0]; if (fi) { img = await achicarImagen(fi, 640); pintarImg(); } } })), img ? h('button', { class: 'btn sm', style: { marginLeft: '6px' }, onclick: () => { img = ''; pintarImg(); } }, 'Quitar') : null); }; pintarImg();
-  el.append(...[h('div', { class: 'tipo' }, 'EDITANDO'), h('h2', {}, e.nombre), campo('Nombre', f.nombre), campo('Tipo', f.tipo), CE.caja, campo('Alias válidos', f.alias), campo('Grafías incorrectas (se corrigen y enlazan solas)', f.errores), campo('Resumen de una línea', f.resumen), campo('Descripción (lo que sabe el grupo)', f.cuerpo), detector(f.cuerpo), campo('Dónde se aparta del lore oficial (lo ven los jugadores)', f.desvio),
-    campo('Notas solo para el DM', f.secreto), campo('Está dentro de…', f.padre), campo('Visibilidad', f.vis), campo('Se revela en la sesión', f.rev), e.tipo === 'personaje' ? campo('Jugador', f.jugador) : null,
-    h('label', { class: 'lab f' }, 'Retrato'), imgBox, h('label', { class: 'lab f' }, 'Vínculos'), relBox, h('button', { class: 'btn sm', onclick: () => { rels.push({ t: '', d: S.ents.find(x => x.id !== e.id).id }); pintarRels(); } }, '+ Vínculo'),
+  const plegado = (tit, abierto, ...cont) => h('details', { class: 'ed-mas', open: abierto || null }, h('summary', {}, tit), ...cont.flat());
+  el.append(...[h('div', { class: 'tipo' }, 'EDITANDO'), h('h2', {}, e.nombre), campo('Nombre', f.nombre), campo('Tipo', f.tipo), CE.caja, campo('Resumen de una línea', f.resumen), campo('Descripción (lo que sabe el grupo)', f.cuerpo), detector(f.cuerpo),
+    campo('Notas solo para el DM', f.secreto), campo('Está dentro de…', f.padre),
+    plegado('Vínculos' + (rels.length ? ' · ' + rels.length : ''), rels.length > 0, relBox, h('button', { class: 'btn sm', onclick: () => { rels.push({ t: '', d: S.ents.find(x => x.id !== e.id).id }); pintarRels(); } }, '+ Vínculo')),
+    plegado('Retrato', false, imgBox),
+    plegado('Quién lo ve y cuándo', false, campo('Visibilidad', f.vis), campo('Se revela en la sesión', f.rev), e.tipo === 'personaje' ? campo('Jugador', f.jugador) : null),
+    plegado('Otros nombres y grafías', false, campo('Alias válidos', f.alias), campo('Grafías incorrectas (se corrigen y enlazan solas)', f.errores)),
+    e.lore || e.desvio ? plegado('Diferencias con el lore oficial', !!e.desvio, campo('Dónde se aparta del oficial (lo ven los jugadores)', f.desvio)) : null,
     h('div', { style: { display: 'flex', gap: '8px', marginTop: '24px' } }, h('button', { class: 'btn pri', onclick: () => {
       const n = f.nombre.value.trim(); if (!n) return toast('Falta el nombre');
       anotarHist(e, e.ficha ? 'Edición' : 'Ficha creada');
@@ -5280,7 +5316,7 @@ function buscador() {
   inp.addEventListener('input', () => { sel = 0; pintar(); });
   inp.addEventListener('keydown', e => { if (e.key === 'ArrowDown') { sel = Math.min(items.length - 1, sel + 1); pintar(); e.preventDefault(); } else if (e.key === 'ArrowUp') { sel = Math.max(0, sel - 1); pintar(); e.preventDefault(); } else if (e.key === 'Enter' && items[sel]) ir(items[sel]); else if (e.key === 'Escape') ov.cerrar(); });
 }
-window.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); buscador(); } });
+window.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); buscar(); } });
 
 /* ---------- varias campañas ---------- */
 function prepararEstado() {
