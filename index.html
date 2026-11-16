@@ -322,6 +322,27 @@ a.rota{color:var(--brasa)}
 .login .codex{font-family:var(--f-label);letter-spacing:.3em;font-size:12px;color:var(--oro);text-transform:uppercase;margin-top:-6px}.login p{max-width:420px;color:var(--txt2,var(--txt))}
 .login .err{color:#e08a6a}.login .nota{color:var(--mut);font-size:14px}.login .campl{min-width:260px}
 .miembro{display:flex;gap:8px;align-items:center;margin:6px 0}.miembro span{flex:1;word-break:break-all}.miembro input{flex:1}
+/* wiki asistida v0.6 */
+.top .btn.rev .rev-n{display:none;min-width:18px;padding:0 5px;border-radius:9px;background:var(--latón);color:#0e1013;font-size:11px;margin-left:4px}.top .btn.rev.hay .rev-n{display:inline-block}
+.lab.capa{margin:18px 0 4px;color:var(--latón)}
+.campos,.lore-datos{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;margin:14px 0;font-size:14.5px}.campos dt,.lore-datos dt{color:var(--mut);font-family:var(--f-label);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;padding-top:2px}.campos dd,.lore-datos dd{margin:0}
+.desvio{border-left:2px solid var(--latón);padding:4px 0 4px 14px;margin:16px 0}
+.aviso.contra .contra-it{padding:8px 0;border-top:1px solid #4f4433;display:grid;gap:4px}.aviso.contra .contra-it:first-of-type{border-top:0}.aviso.contra button{justify-self:start}
+.aviso.lore-sug{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.lore{position:relative}.lore.oculto{opacity:.75}.lore-img{float:right;width:min(200px,38%);margin:0 0 10px 16px;border-radius:6px;border:1px solid var(--linea2)}
+.lore-txt p,.lore-sec p{font-size:15px;line-height:1.6;color:var(--txt2)}.lore-sec summary{cursor:pointer;font-family:var(--f-label);letter-spacing:.06em;color:var(--latón2);padding:6px 0}
+.lore-pie{clear:both;font-size:12.5px;color:var(--mut);margin-top:10px}.lore-pie a{color:var(--latón2)}
+.lore.eclipse{box-shadow:inset 0 0 60px #000;background:radial-gradient(circle at 85% 12%,#000 0 34px,#c9a24b55 36px,transparent 60px);transition:1.2s}
+.lore.luna{background:radial-gradient(circle at 85% 12%,#e9e6dc 0 30px,#e9e6dc33 34px,transparent 80px);transition:1.2s}
+.campos-ed{display:grid;grid-template-columns:max-content 1fr;gap:6px 10px;align-items:center}.campos-ed span{font-size:13px;color:var(--mut)}
+.detector{display:grid;gap:6px;margin:6px 0 4px;font-size:13px}.detector .lab{display:inline;margin-right:4px}.detector .chip{margin:2px 4px 2px 0}.detector button.chip{cursor:pointer}
+.recap h2{font-family:var(--f-titulo);margin:4px 0 10px}.recap p{margin:10px 0}
+.quien img{width:96px;height:96px;object-fit:cover;border-radius:50%;float:right;margin-left:12px}.quien h2{font-family:var(--f-titulo);margin:2px 0 6px}.quien .btn{margin-top:10px}
+.revisar h3{margin-top:22px}
+@media(max-width:820px){.top .btn.rev,.top .btn[title^="Buscá"]{padding-left:8px;padding-right:8px}.lore-img{float:none;display:block;width:60%;margin:0 auto 10px}}
+@media(max-width:700px){.top .btn.rev .rev-n{font-size:11px}}
+@media(max-width:440px){.top{gap:4px}.top h1{display:none}.top select{max-width:80px}.top .btn{padding:7px 7px}.top .seg button{padding:6px 7px;letter-spacing:.02em}.top button.camp{max-width:78px}}
+.top .seg,.top .btn,.top select{flex-shrink:0}.top button.camp{flex-shrink:1;min-width:0}
 
 </style>
 </head>
@@ -434,8 +455,10 @@ let S = null;                 // estado de la campaña
 let SOLO_LECTURA = false;     // true en la versión para jugadores
 const clonar = o => JSON.parse(JSON.stringify(o));
 let _saveT = null;
+let _genGuardado = 0;
 function guardar() {
   if (SOLO_LECTURA) return;
+  _genGuardado++;
   clearTimeout(_saveT);
   if (typeof NUBE !== 'undefined' && NUBE.on) NUBE.sucio = true;
   _saveT = setTimeout(guardarYa, typeof NUBE !== 'undefined' && NUBE.on ? 6000 : 350);
@@ -456,7 +479,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.5.2';
+const VERSION = '0.6.0';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -4253,6 +4276,353 @@ async function actualizarApp() {
   addEventListener('touchend', e => { const d = y0 == null ? 0 : e.changedTouches[0].clientY - y0; y0 = null; ind?.remove(); ind = null; if (d >= 70) actualizarApp(); }, { passive: true });
 })();
 
+/* ===== Wiki asistida: lore oficial, capas mesa/oficial, contradicciones, plantillas, propuestas,
+   cola de revisión, recap, historial/papelera y "¿Quién es…?" ===== */
+const FRW = 'https://forgottenrealms.fandom.com';
+const SUBTIPOS = {
+  lugar: ['Plano', 'Continente', 'Región', 'Reino', 'Provincia', 'Ciudad', 'Pueblo', 'Aldea', 'Barrio', 'Fortaleza', 'Templo', 'Posada', 'Mazmorra', 'Ruinas', 'Bosque', 'Montaña', 'Río o lago', 'Mar', 'Isla', 'Otro'],
+  deidad: ['Dios mayor', 'Dios intermedio', 'Dios menor', 'Semidiós', 'Primordial', 'Gran Antiguo', 'Archidiablo', 'Señor demonio', 'Patrón'],
+  faccion: ['Casa noble', 'Gremio', 'Orden', 'Culto', 'Iglesia', 'Ejército', 'Compañía', 'Sociedad secreta', 'Tribu'],
+  pnj: ['Aliado', 'Rival', 'Villano', 'Comerciante', 'Autoridad', 'Mentor', 'Neutral'],
+  criatura: ['Bestia', 'Monstruo', 'Dragón', 'No muerto', 'Demonio', 'Diablo', 'Feérico', 'Elemental', 'Aberración', 'Constructo', 'Gigante'],
+  objeto: ['Arma', 'Armadura', 'Objeto mágico', 'Artefacto', 'Reliquia', 'Documento', 'Llave', 'Otro'],
+  evento: ['Batalla', 'Ritual', 'Catástrofe', 'Tratado', 'Fundación', 'Muerte', 'Profecía'],
+  concepto: ['Magia', 'Religión', 'Historia', 'Idioma', 'Costumbre', 'Profecía']
+};
+const PLANTILLAS = {
+  personaje: ['Raza', 'Clase', 'Trasfondo', 'Origen'], pnj: ['Raza', 'Oficio', 'Afiliación', 'Paradero', 'Estado'],
+  lugar: ['Gobernante', 'Población', 'Clima', 'Conocido por', 'Peligros'], deidad: ['Dominios', 'Alineamiento', 'Símbolo', 'Plano', 'Fieles'],
+  faccion: ['Líder', 'Sede', 'Objetivos', 'Símbolo', 'Aliados', 'Enemigos'], criatura: ['Hábitat', 'Peligrosidad', 'Debilidades'],
+  objeto: ['Rareza', 'Portador', 'Origen', 'Propiedades'], evento: ['Fecha', 'Lugar', 'Participantes', 'Consecuencias'], concepto: ['Origen', 'Quiénes lo conocen']
+};
+const OF_MAP = [[/domain|portfolio/i, ['Dominios']], [/alignment/i, ['Alineamiento']], [/symbol/i, ['Símbolo']], [/plane|realm/i, ['Plano']], [/worshipers?/i, ['Fieles']],
+  [/ruler|leader|head/i, ['Gobernante', 'Líder']], [/population/i, ['Población']], [/climate/i, ['Clima']], [/race|species/i, ['Raza']], [/class|occupation/i, ['Clase', 'Oficio']],
+  [/affiliation|organi[sz]ation/i, ['Afiliación']], [/base|headquarters|seat/i, ['Sede']], [/goals?/i, ['Objetivos']], [/allies/i, ['Aliados']], [/enem/i, ['Enemigos']],
+  [/rarity/i, ['Rareza']], [/habitat|environment|terrain/i, ['Hábitat']], [/^date/i, ['Fecha']], [/location/i, ['Lugar', 'Paradero']], [/status/i, ['Estado']], [/creator|origin/i, ['Origen']]];
+const OF_SUB = [[/continent/i, 'Continente'], [/kingdom|nation|empire|country/i, 'Reino'], [/region|subregion/i, 'Región'], [/province|duchy|county/i, 'Provincia'], [/city|metropolis/i, 'Ciudad'], [/town/i, 'Pueblo'],
+  [/village|hamlet/i, 'Aldea'], [/district|ward|quarter/i, 'Barrio'], [/fortress|castle|keep|citadel/i, 'Fortaleza'], [/temple|shrine/i, 'Templo'], [/inn|tavern/i, 'Posada'], [/dungeon/i, 'Mazmorra'],
+  [/ruin/i, 'Ruinas'], [/forest|wood/i, 'Bosque'], [/mountain|range|peak/i, 'Montaña'], [/river|lake/i, 'Río o lago'], [/sea|ocean/i, 'Mar'], [/island/i, 'Isla'], [/plane/i, 'Plano'],
+  [/greater deity/i, 'Dios mayor'], [/intermediate deity/i, 'Dios intermedio'], [/lesser deity/i, 'Dios menor'], [/demigod/i, 'Semidiós'], [/primordial/i, 'Primordial']];
+const quienSoy = () => NUBE.on && NUBE.user ? NUBE.user.nombre : 'este dispositivo';
+const fechaCorta = t => new Date(t).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
+const tipoTxt = e => TIPOS[e.tipo] + (e.sub ? ' · ' + e.sub : '');
+
+/* ---------- 1. Lore oficial (Forgotten Realms Wiki, CC BY-SA) ---------- */
+async function frBuscar(q) {
+  const r = await fetch(FRW + '/api.php?action=opensearch&search=' + encodeURIComponent(q) + '&limit=6&namespace=0&format=json&origin=*');
+  return (await r.json())[1] || [];
+}
+async function frTraer(titulo) {
+  const r = await fetch(FRW + '/api.php?action=parse&page=' + encodeURIComponent(titulo) + '&prop=text&redirects=1&format=json&formatversion=2&origin=*');
+  const j = await r.json(); if (j.error) throw new Error(j.error.info || 'página no encontrada');
+  const doc = new DOMParser().parseFromString(j.parse.text, 'text/html'), raiz = doc.querySelector('.mw-parser-output') || doc.body;
+  raiz.querySelectorAll('sup,.reference,.mw-editsection,style,script,.navbox,.toc,#toc').forEach(x => x.remove());
+  const datos = []; let img = '';
+  const src = im => { const s = im.getAttribute('data-src') || im.getAttribute('src') || ''; return s.startsWith('data:') ? '' : s; };
+  const ib = raiz.querySelector('aside.portable-infobox') || raiz.querySelector('table.infobox');
+  if (ib) {
+    ib.querySelectorAll('br').forEach(b => b.replaceWith(', '));
+    if (ib.tagName === 'ASIDE') ib.querySelectorAll('.pi-data').forEach(d => { const l = d.querySelector('.pi-data-label')?.textContent.trim(), v = d.querySelector('.pi-data-value')?.textContent.replace(/\s+/g, ' ').replace(/\s,/g, ',').replace(/(,\s*)+$/, '').trim(); if (l && v) datos.push([l, v.slice(0, 300)]); });
+    else ib.querySelectorAll('tr').forEach(tr => { const th = tr.querySelector('th'), td = tr.querySelector('td'); if (th && td) datos.push([th.textContent.trim(), td.textContent.replace(/\s+/g, ' ').trim().slice(0, 300)]); });
+    const im = ib.querySelector('img'); if (im) img = src(im); ib.remove();
+  }
+  const secs = []; let cur = { t: 'Resumen', p: [] };
+  for (const n of raiz.children) {
+    if (/^H[23]$/.test(n.tagName)) { if (cur.p.length) secs.push(cur); cur = { t: n.textContent.replace(/\s+/g, ' ').trim(), p: [] }; continue; }
+    if (n.tagName === 'P' || n.tagName === 'UL') { const t = n.textContent.replace(/\s+/g, ' ').trim(); if (t.length > 30) cur.p.push(t); }
+  }
+  if (cur.p.length) secs.push(cur);
+  const fuera = /^(appendix|references|notes|external links|further reading|gallery|appearances|see also|connections|sources)/i;
+  return { titulo: j.parse.title, url: FRW + '/wiki/' + encodeURIComponent(j.parse.title.replace(/ /g, '_')), datos: datos.slice(0, 16), img: img.replace(/\/scale-to-width-down\/\d+/, '/scale-to-width-down/480'),
+    secciones: secs.filter(s => !fuera.test(s.t)).slice(0, 8).map((s, i) => ({ t: s.t, p: s.p.slice(0, i ? 3 : 4).map(x => x.slice(0, 1000)) })), fecha: Date.now() };
+}
+async function imgADato(url) { try { const r = await fetch(url); if (!r.ok) throw 0; return await achicarImagen(await r.blob(), 480); } catch (_) { return url; } }
+async function traerLore(e, titulo) {
+  if (!navigator.onLine) return toast('Hace falta internet para traer el lore oficial');
+  toast('Trayendo «' + titulo + '» de la Forgotten Realms Wiki…');
+  try {
+    const L = await frTraer(titulo); if (L.img) L.img = await imgADato(L.img);
+    anotarHist(e, e.lore ? 'Lore oficial actualizado' : 'Lore oficial agregado');
+    L.oculto = e.lore?.oculto || false; e.lore = L; e.loreNo = false;
+    const n = completarDesdeOficial(e); guardar(); render(); huevoLore(L.titulo);
+    toast('Lore oficial guardado' + (n ? ' · completé ' + n + (n === 1 ? ' dato vacío' : ' datos vacíos') : ''));
+  } catch (x) { toast('No pude traerlo: ' + (x.message || x)); }
+}
+function completarDesdeOficial(e) {
+  if (!e.lore) return 0; let n = 0; const pl = PLANTILLAS[e.tipo] || []; e.campos = e.campos || {};
+  for (const [l, v] of e.lore.datos) { const m = OF_MAP.find(([rx]) => rx.test(l)); if (!m) continue; const c = m[1].find(x => pl.includes(x)); if (c && !e.campos[c]) { e.campos[c] = v; n++; } }
+  if (!e.sub && SUBTIPOS[e.tipo]) for (const [l, v] of e.lore.datos) if (/type|power|size|rank/i.test(l)) { const s = OF_SUB.find(([rx, st]) => rx.test(v) && SUBTIPOS[e.tipo].includes(st)); if (s) { e.sub = s[1]; n++; break; } }
+  return n;
+}
+function elegirLore(e) {
+  const inp = h('input', { type: 'search', value: e.lore?.titulo || e.nombre }), res = h('div', { style: { marginTop: '10px' } });
+  const buscar = async () => { res.textContent = 'Buscando…'; try { const ts = await frBuscar(inp.value.trim()); res.innerHTML = ''; if (!ts.length) res.append(h('p', { class: 'empty' }, 'No hay páginas con ese nombre.')); ts.forEach(t => res.append(h('div', { class: 'res-it', onclick: () => { ov.cerrar(); traerLore(e, t); } }, h('span', { class: 'n' }, t), h('span', { class: 't' }, 'Forgotten Realms Wiki')))); } catch (_) { res.textContent = 'Sin conexión con la wiki.'; } };
+  inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') buscar(); });
+  const ov = modal('Lore oficial de «' + e.nombre + '»', h('div', {}, inp, res), [{ txt: 'Cerrar' }]); buscar();
+}
+const _loreSug = {};
+function sugerenciaLore(e) {
+  if (!esDM() || e.lore || e.loreNo || e.tipo === 'personaje' || !navigator.onLine) return null;
+  const box = h('div', { class: 'aviso lore-sug' });
+  const pintar = ts => {
+    box.innerHTML = ''; const k = norm(e.nombre), exactos = ts.filter(t => norm(t) === k || norm(t).startsWith(k + ' ('));
+    if (!exactos.length) { box.remove(); return; }
+    box.append(h('span', {}, 'Parece lore oficial de D&D: '), exactos.slice(0, 3).map(t => h('button', { class: 'btn sm pri', onclick: () => traerLore(e, t) }, 'Traer «' + t + '»')),
+      h('button', { class: 'btn sm', onclick: () => elegirLore(e) }, 'Otra página'), h('button', { class: 'btn sm', onclick: () => { e.loreNo = true; guardar(); box.remove(); } }, 'No es oficial'));
+  };
+  if (_loreSug[e.id]) pintar(_loreSug[e.id]); else frBuscar(e.nombre).then(ts => { _loreSug[e.id] = ts; pintar(ts); }).catch(() => box.remove());
+  return box;
+}
+function bloqueLore(e) {
+  const dm = esDM(), L = e.lore; if (!L || (!dm && L.oculto)) return null;
+  const tr = 'https://forgottenrealms-fandom-com.translate.goog/wiki/' + encodeURIComponent(L.titulo.replace(/ /g, '_')) + '?_x_tr_sl=en&_x_tr_tl=es';
+  const w = h('div', { class: 'bloque lore' + (L.oculto ? ' oculto' : ''), 'data-lore': norm(L.titulo) },
+    h('div', { class: 'lab' }, 'Lore oficial · Forgotten Realms Wiki' + (L.oculto ? ' · oculto a jugadores' : '')),
+    L.img ? h('img', { class: 'lore-img', src: L.img, alt: '', loading: 'lazy', onerror: ev => ev.target.remove() }) : null,
+    L.datos.length ? h('dl', { class: 'lore-datos' }, L.datos.slice(0, 10).map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])) : null);
+  L.secciones.forEach((s, i) => { const ps = s.p.map(p => h('p', {}, p)); w.append(i === 0 ? h('div', { class: 'lore-txt' }, ps) : h('details', { class: 'lore-sec' }, h('summary', {}, s.t), ps)); });
+  w.append(h('div', { class: 'lore-pie' }, h('a', { href: L.url, target: '_blank', rel: 'noopener' }, 'Leer completo'), ' · ', h('a', { href: tr, target: '_blank', rel: 'noopener' }, 'En español (traductor)'),
+    h('span', {}, ' · Texto CC BY-SA, Forgotten Realms Wiki (Fandom) · traído el ' + fechaCorta(L.fecha))));
+  if (dm) w.append(h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '10px' } },
+    h('button', { class: 'btn sm', onclick: () => traerLore(e, L.titulo) }, 'Actualizar'), h('button', { class: 'btn sm', onclick: () => elegirLore(e) }, 'Cambiar página'),
+    h('button', { class: 'btn sm', onclick: () => { L.oculto = !L.oculto; guardar(); render(); } }, L.oculto ? 'Mostrar a jugadores' : 'Ocultar a jugadores'),
+    h('button', { class: 'btn sm peligro', onclick: () => { anotarHist(e, 'Lore oficial quitado'); delete e.lore; e.loreNo = true; guardar(); render(); } }, 'Quitar')));
+  return w;
+}
+function huevoLore(t) { // 🥚 ver docs/EASTER_EGGS.md
+  const k = norm(t); if (k !== 'shar' && k !== 'selune') return;
+  setTimeout(() => { const b = document.querySelector('.lore[data-lore="' + k + '"]'); if (b) b.classList.add(k === 'shar' ? 'eclipse' : 'luna'); }, 60);
+  toast(k === 'shar' ? 'La Dama de la Pérdida ya sabe tu nombre.' : 'Que la Doncella de la Luna guíe tus pasos.', 3200);
+}
+
+/* ---------- 3. Contradicciones entre la mesa y el oficial ---------- */
+const PARENT = [['hermano', /herman|gemel|mellizo/i, /sister|brother|sibling|twin/i], ['padre', /padre|madre|progenitor|cre[oóa]/i, /father|mother|parent|creator|created/i],
+  ['hijo', /hij[oa]|descendiente|cread[oa] por/i, /\bson\b|daughter|child|offspring/i], ['pareja', /espos|marido|pareja|consorte|amante/i, /wife|husband|consort|spouse|lover/i],
+  ['enemigo', /enemig|rival|némesis|odia/i, /enem|rival|nemesis|foe|hatred|hates/i], ['aliado', /alia|amig|sirve|servidor/i, /all(y|ies)\b|friend|serves|servant/i]];
+const FAMILIA = ['hermano', 'padre', 'hijo', 'pareja'];
+function contradicciones(e) {
+  if (!e.lore) return []; const out = [], ok = new Set(e.okContra || []), desv = norm(e.desvio || '');
+  const frases = []; e.lore.secciones.forEach(s => s.p.forEach(p => frases.push(...p.split(/(?<=[.;])\s+/))));
+  e.lore.datos.forEach(([l, v]) => frases.push(l + ': ' + v));
+  for (const r of e.rel || []) {
+    const d = porId(r.d); if (!d) continue; const cat = PARENT.find(p => p[1].test(r.t)); if (!cat) continue;
+    const key = r.d + '|' + norm(r.t); if (ok.has(key)) continue;
+    const nombres = [d.nombre, ...(d.alias || []), d.lore?.titulo].filter(Boolean).map(norm); if (nombres.some(n => desv.includes(n))) continue;
+    const ens = frases.filter(f => { const nf = norm(f); return nombres.some(n => n.length > 2 && nf.includes(n)); }); if (!ens.length) continue;
+    const of = new Set(); ens.forEach(f => PARENT.forEach(p => { if (p[2].test(f)) of.add(p[0]); }));
+    if (!of.size || of.has(cat[0])) continue;
+    const choca = FAMILIA.includes(cat[0]) ? FAMILIA.some(c => of.has(c)) : of.has(cat[0] === 'enemigo' ? 'aliado' : 'enemigo');
+    if (choca) out.push({ key, r, d, frase: ens.find(f => PARENT.some(p => of.has(p[0]) && p[2].test(f))) || ens[0] });
+  }
+  return out;
+}
+function avisoContradicciones(e) {
+  const cs = contradicciones(e); if (!cs.length || !esDM()) return null;
+  return h('div', { class: 'aviso contra' }, h('div', { class: 'lab' }, 'Posible contradicción con el lore oficial'),
+    cs.map(c => h('div', { class: 'contra-it' }, h('div', {}, h('b', {}, 'En la mesa: '), e.nombre + ' ' + c.r.t + ' ' + c.d.nombre + '.'), h('div', {}, h('b', {}, 'Oficial: '), h('i', {}, '“' + c.frase.slice(0, 260) + '”')),
+      h('button', { class: 'btn sm', onclick: () => { e.okContra = [...(e.okContra || []), c.key]; guardar(); render(); } }, 'Es a propósito'))));
+}
+
+/* ---------- 2 y 7. Capas, subtipo y datos de plantilla en la ficha ---------- */
+function bloqueCampos(e) {
+  const cs = Object.entries(e.campos || {}).filter(([, v]) => v && String(v).trim()); if (!cs.length) return null;
+  return h('dl', { class: 'campos' }, cs.map(([k, v]) => [h('dt', {}, k), h('dd', { html: rich(String(v)).replace(/^<p>|<\/p>$/g, '') })]));
+}
+function bloqueDesvio(e) { return e.desvio && e.desvio.trim() ? h('div', { class: 'desvio' }, h('div', { class: 'lab' }, 'En esta mesa cambia respecto del oficial'), h('div', { class: 'cuerpo', html: rich(e.desvio) })) : null; }
+function camposEditor(e, f) { // agrega al editor: subtipo, datos de plantilla, desvío y detector
+  const caja = h('div'), est = { sub: e.sub || '', campos: { ...(e.campos || {}) } };
+  const pintar = () => {
+    const tipo = f.tipo.value, subs = SUBTIPOS[tipo] || [], pl = PLANTILLAS[tipo] || []; caja.innerHTML = '';
+    if (subs.length) caja.append(h('label', { class: 'lab f' }, 'Clase de ' + TIPOS[tipo].toLowerCase()), h('select', { onchange: ev => est.sub = ev.target.value }, h('option', { value: '' }, '(sin definir)'), subs.map(s => h('option', { value: s, selected: s === est.sub }, s))));
+    const extra = Object.keys(est.campos).filter(k => !pl.includes(k) && est.campos[k]);
+    if (pl.length || extra.length) caja.append(h('label', { class: 'lab f' }, 'Datos'), h('div', { class: 'campos-ed' }, [...pl, ...extra].map(k => [h('span', {}, k), h('input', { type: 'text', value: est.campos[k] || '', oninput: ev => est.campos[k] = ev.target.value })])));
+    if (e.lore) caja.append(h('button', { class: 'btn sm', style: { marginTop: '6px' }, onclick: () => { const tmp = { tipo, sub: est.sub, campos: est.campos, lore: e.lore }; const n = completarDesdeOficial(tmp); est.sub = tmp.sub || ''; pintar(); toast(n ? 'Completé ' + n + ' datos desde el oficial' : 'No había datos vacíos para completar'); } }, 'Completar desde el oficial'));
+  };
+  f.tipo.addEventListener('change', pintar); pintar();
+  f.desvio = h('textarea', { rows: 3, value: e.desvio || '', placeholder: 'Ej.: en nuestra mesa Shar y Selûne no son hermanas: Selûne la creó.' });
+  return { caja, est };
+}
+function detector(ta) { // 8. Detector de nombres mientras se escribe
+  const box = h('div', { class: 'detector' }); let t0;
+  const pintar = () => {
+    const txt = ta.value; box.innerHTML = ''; if (!txt.trim()) return;
+    const segs = segmentos(txt, { soloVisibles: false }).filter(g => g.t === 'ent'), vistos = new Map();
+    segs.forEach(g => { if (!vistos.has(g.id)) vistos.set(g.id, g); else if (g.kind === 'error') vistos.set(g.id, g); });
+    const fixes = segs.filter(g => g.kind === 'error'), nuevos = candidatosNuevos(txt, 1).slice(0, 8), dudas = sugerir(txt).slice(0, 5);
+    if (vistos.size) box.append(h('div', {}, h('span', { class: 'lab' }, 'Se enlaza solo: '), [...vistos.values()].map(g => h('span', { class: 'chip' }, porId(g.id).nombre))));
+    if (fixes.length) box.append(h('div', {}, h('span', { class: 'lab' }, 'Se corrige: '), fixes.map(g => h('span', { class: 'chip er' }, g.s + ' → ' + porId(g.id).nombre))));
+    if (dudas.length) box.append(h('div', {}, h('span', { class: 'lab' }, '¿Es alguno de estos? '), dudas.map(s => h('button', { class: 'chip', onclick: () => { const x = porId(s.ents[0][0]); x.errores = [...(x.errores || []), s.orig]; invalidarIdx(); guardar(); pintar(); toast('«' + s.orig + '» ahora se corrige a ' + x.nombre); } }, s.orig + ' = ' + porId(s.ents[0][0]).nombre + ' ✓'))));
+    if (nuevos.length) box.append(h('div', {}, h('span', { class: 'lab' }, 'Nombres sin ficha: '), nuevos.map(c => h('button', { class: 'chip al', onclick: () => { altaTermino(c.orig, adivinarTipo(txt, c.orig)); pintar(); } }, '+ ' + c.orig))));
+  };
+  ta.addEventListener('input', () => { clearTimeout(t0); t0 = setTimeout(pintar, 350); }); setTimeout(pintar, 0);
+  return box;
+}
+function altaTermino(nombre, tipo) {
+  const e = { id: slugUnico(nombre), tipo: tipo || 'pnj', nombre, alias: [], errores: [], resumen: '', cuerpo: '', secreto: '', padre: null, rel: [], vis: 'grupo', rev: S.ses, ficha: false, etiquetas: [], imagen: '', jugador: '' };
+  S.ents.push(e); invalidarIdx(); guardar(); toast('«' + nombre + '» quedó en el glosario como ' + TIPOS[e.tipo] + '. Se enlaza solo desde ahora.'); return e;
+}
+function adivinarTipo(txt, nombre) {
+  const i = norm(txt).indexOf(norm(nombre)), antes = i > 0 ? norm(txt.slice(Math.max(0, i - 30), i)) : '';
+  if (/(ciudad|pueblo|reino|aldea|region|bosque|monte|montanas|rio|lago|isla|castillo|fortaleza|templo|posada|taberna|mar)( de| del)?\s*$/.test(antes)) return 'lugar';
+  if (/(dios|diosa|deidad|culto a)( de)?\s*$/.test(antes)) return 'deidad';
+  if (/(orden|gremio|casa|culto|hermandad|clan)( de| del)?\s*$/.test(antes)) return 'faccion';
+  return /^(en|a|hacia|desde|de)\s*$/.test(antes.slice(-6).trim()) ? 'lugar' : 'pnj';
+}
+
+/* ---------- 4. Propuestas desde una transcripción (y dictado) ---------- */
+const NO_NOMBRES = new Set('el la los las un una unos unas y o pero entonces que qué bueno si sí no ahora despues después cuando donde dónde yo vos tu tú el él ella ellos ellas nosotros ustedes ok okay dale che mira mirá listo claro igual tambien también esto eso este esta ese esa aca acá ahi ahí bien muy hay como cómo porque por para con sin todo todos nada algo alguien ya mas más pues osea o sea gracias hola chau dm master dados dado tirada iniciativa turno daño ronda nivel punto puntos vida hp ca'.split(' '));
+function candidatosNuevos(texto, min = 2) {
+  const { mapa } = indice(), ign = new Set(S.ignoradas || []), c = new Map();
+  const re = /(^|[.!?…:\n]\s*|\s)(\p{Lu}[\p{L}'’\-]+(?:\s+(?:de|del|la|las|los|el)?\s*\p{Lu}[\p{L}'’\-]+){0,2})/gu; let m;
+  while ((m = re.exec(texto))) {
+    const inicio = /[.!?…:\n]\s*$/.test(m[1]) || m.index === 0, orig = m[2].trim(), k = norm(orig);
+    if (k.length < 4 || mapa.has(k) || ign.has(k) || NO_NOMBRES.has(k) || k.split(' ').every(w => NO_NOMBRES.has(w) || mapa.has(w))) continue;
+    const x = c.get(k) || { orig, k, n: 0, medio: 0, i: m.index }; x.n++; if (!inicio) x.medio++; c.set(k, x);
+  }
+  return [...c.values()].filter(x => x.n >= min && x.medio >= 1).sort((a, b) => b.n - a.n);
+}
+function propuestas(t) {
+  const out = { nuevos: candidatosNuevos(t.original).slice(0, 25), sinFicha: [], revela: [], vinculos: [] };
+  const men = contarMenciones(t.original);
+  for (const [id, n] of men) { const e = porId(id); if (!e) continue; if (!e.ficha && n >= 2) out.sinFicha.push({ e, n }); if (t.ses && e.rev > t.ses) out.revela.push({ e, n }); }
+  const desc = new Set(S.ajustes.descVinc || []), pares = new Map();
+  for (const b of formatear(t.original)) {
+    if (b.k !== 'p') continue; const ids = [...new Set(segmentos(b.t, { soloVisibles: false }).filter(g => g.t === 'ent').map(g => g.id))];
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) { const k = [ids[i], ids[j]].sort().join('|'); pares.set(k, (pares.get(k) || 0) + 1); }
+  }
+  for (const [k, n] of pares) {
+    if (n < 3 || desc.has(k)) continue; const [a, b] = k.split('|').map(porId); if (!a || !b) continue;
+    if ((a.rel || []).some(r => r.d === b.id) || (b.rel || []).some(r => r.d === a.id) || a.padre === b.id || b.padre === a.id) continue;
+    out.vinculos.push({ a, b, n, k });
+  }
+  out.vinculos.sort((x, y) => y.n - x.n); out.vinculos = out.vinculos.slice(0, 12); out.sinFicha.sort((x, y) => y.n - x.n);
+  return out;
+}
+function panelPropuestas(t) {
+  const p = propuestas(t), w = h('div', { class: 'props' }), tot = p.nuevos.length + p.sinFicha.length + p.revela.length + p.vinculos.length;
+  w.append(h('div', { class: 'lab', style: { marginTop: '16px' } }, 'Propuestas para la wiki · ' + tot));
+  if (!tot) { w.append(h('p', { class: 'empty' }, 'Nada nuevo para proponer.')); return w; }
+  const fila = (txt, sub, bts) => h('div', { class: 'sug' }, h('div', { class: 'f' }, txt), h('div', { class: 'm' }, sub), h('div', { class: 'a' }, bts));
+  p.nuevos.forEach(c => w.append(fila(h('b', {}, c.orig), 'Nombre nuevo · ' + c.n + ' veces', [h('button', { class: 'btn sm pri', onclick: () => { altaTermino(c.orig, adivinarTipo(t.original, c.orig)); render(); } }, 'Crear'),
+    h('button', { class: 'btn sm', onclick: () => { S.ignoradas.push(c.k); guardar(); render(); } }, 'No es')])));
+  p.sinFicha.forEach(({ e, n }) => w.append(fila(h('b', {}, e.nombre), 'Mencionado ' + n + ' veces y sin ficha', [h('button', { class: 'btn sm pri', onclick: () => { e.ficha = true; guardar(); Nav.ent = e.id; Nav.edit = true; Nav.ir('fichas'); } }, 'Hacer ficha')])));
+  p.revela.forEach(({ e }) => w.append(fila(h('b', {}, e.nombre), 'Figura como revelado en la sesión ' + e.rev + ', pero ya aparece acá', [h('button', { class: 'btn sm pri', onclick: () => { anotarHist(e, 'Revelado antes'); e.rev = t.ses; guardar(); render(); } }, 'Revelar en la ' + t.ses)])));
+  p.vinculos.forEach(v => w.append(fila([h('b', {}, v.a.nombre), ' y ', h('b', {}, v.b.nombre)], 'Aparecen juntos ' + v.n + ' veces, sin vínculo', [h('button', { class: 'btn sm pri', onclick: () => preguntar('Vínculo', v.a.nombre + ' … ' + v.b.nombre, '', txt => { anotarHist(v.a, 'Vínculo agregado'); v.a.rel = [...(v.a.rel || []), { t: txt, d: v.b.id }]; guardar(); render(); }) }, 'Vincular'),
+    h('button', { class: 'btn sm', onclick: () => { S.ajustes.descVinc = [...(S.ajustes.descVinc || []), v.k]; guardar(); render(); } }, 'No')])));
+  return w;
+}
+function dictar() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) return toast('Este navegador no permite dictar. Probá con Chrome.');
+  const ta = h('textarea', { rows: 10, placeholder: 'Hablá: el texto va apareciendo acá. Podés corregirlo antes de guardar.' }), est = h('div', { class: 'lab' }, 'Escuchando…');
+  let vivo = true, fijo = ''; const r = new SR(); r.lang = 'es-AR'; r.continuous = true; r.interimResults = true;
+  r.onresult = ev => { let tmp = ''; for (let i = ev.resultIndex; i < ev.results.length; i++) { const x = ev.results[i]; if (x.isFinal) fijo += x[0].transcript.trim() + '. '; else tmp += x[0].transcript; } ta.value = fijo + tmp; };
+  r.onend = () => { if (vivo) try { r.start(); } catch (_) { } }; r.onerror = ev => { if (ev.error === 'not-allowed') { vivo = false; est.textContent = 'Sin permiso para usar el micrófono.'; } };
+  r.start();
+  modal('Dictar notas de sesión', h('div', {}, est, ta), [{ txt: 'Cancelar', fn: () => { vivo = false; r.stop(); } }, { txt: 'Guardar como transcripción', pri: true, fn: () => { vivo = false; r.stop(); const v = ta.value.trim(); if (!v) return; altaTranscripcion('Dictado ' + new Date().toLocaleDateString('es-AR'), v); } }]);
+}
+
+/* ---------- 9. Historial por ficha y papelera ---------- */
+function anotarHist(e, motivo) {
+  S.hist = S.hist || {}; const l = S.hist[e.id] = S.hist[e.id] || [], v = clonar(e);
+  const prev = l[l.length - 1]; if (prev && JSON.stringify({ ...prev.v, imagen: 0 }) === JSON.stringify({ ...v, imagen: 0 }) && Date.now() - prev.t < 60000) return;
+  if (v.imagen && l.some(x => x.v.imagen === v.imagen)) v.imagen = '='; if (v.lore?.img?.startsWith('data:')) v.lore.img = '=';
+  l.push({ t: Date.now(), quien: quienSoy(), motivo, v }); if (l.length > 12) l.splice(0, l.length - 12);
+}
+const CAMPOS_H = [['nombre', 'nombre'], ['tipo', 'tipo'], ['sub', 'clase'], ['resumen', 'resumen'], ['cuerpo', 'descripción'], ['secreto', 'notas del DM'], ['desvio', 'cambios vs oficial'], ['campos', 'datos'], ['rel', 'vínculos'], ['padre', 'ubicación'], ['vis', 'visibilidad'], ['rev', 'sesión de revelación'], ['alias', 'alias'], ['errores', 'grafías'], ['imagen', 'retrato'], ['lore', 'lore oficial']];
+function historial(e) {
+  const l = (S.hist?.[e.id] || []).slice().reverse(), caja = h('div', { class: 'hist' });
+  if (!l.length) caja.append(h('p', { class: 'empty' }, 'Todavía no hay cambios guardados de esta ficha.'));
+  l.forEach(x => {
+    const dif = CAMPOS_H.filter(([k]) => k !== 'imagen' ? JSON.stringify(x.v[k] ?? '') !== JSON.stringify(e[k] ?? '') : x.v.imagen !== '=' && (x.v.imagen || '') !== (e.imagen || '')).map(c => c[1]);
+    caja.append(h('div', { class: 'sug' }, h('div', { class: 'f' }, x.motivo), h('div', { class: 'm' }, new Date(x.t).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) + ' · ' + x.quien + (dif.length ? ' · distinto en: ' + dif.join(', ') : ' · igual a la actual')),
+      h('div', { class: 'a' }, dif.length ? h('button', { class: 'btn sm', onclick: () => { ov.cerrar(); restaurarVersion(e, x.v); } }, 'Volver a esta') : null)));
+  });
+  const ov = modal('Historial de «' + e.nombre + '»', caja, [{ txt: 'Cerrar' }]);
+}
+function restaurarVersion(e, v) {
+  const img = v.imagen === '=' ? (S.hist[e.id].find(x => x.v.imagen && x.v.imagen !== '=')?.v.imagen ?? e.imagen) : v.imagen, limg = v.lore?.img === '=' ? e.lore?.img : v.lore?.img;
+  anotarHist(e, 'Antes de volver atrás'); for (const k of Object.keys(e)) if (k !== 'id') delete e[k];
+  Object.assign(e, clonar(v), { imagen: img || '' }); if (e.lore) e.lore.img = limg || ''; invalidarIdx(); guardar(); render(); toast('Ficha restaurada');
+}
+function aPapelera(e) {
+  const inv = []; S.ents.forEach(x => (x.rel || []).forEach(r => { if (r.d === e.id) inv.push({ de: x.id, r: clonar(r) }); }));
+  S.papelera = [...(S.papelera || []), { t: Date.now(), quien: quienSoy(), e: clonar(e), inv, pin: S.mapa?.pines.find(p => p.ent === e.id) || null }].slice(-30);
+}
+function restaurarPapelera(i) {
+  const x = S.papelera[i]; if (!x) return; if (porId(x.e.id)) x.e.id = slugUnico(x.e.nombre);
+  S.ents.push(x.e); x.inv.forEach(({ de, r }) => { const o = porId(de); if (o) o.rel = [...(o.rel || []), { ...r, d: x.e.id }]; });
+  if (x.pin && S.mapa) S.mapa.pines.push({ ...x.pin, ent: x.e.id }); S.papelera.splice(i, 1); invalidarIdx(); guardar(); render(); toast('«' + x.e.nombre + '» volvió');
+}
+
+/* ---------- 5. Cola "Por revisar" ---------- */
+let _rev = null;
+function pendientes() {
+  if (_rev && _rev.S === S && _rev.n === _genGuardado) return _rev.l;
+  const l = [], ign = new Set(S.revIgn || []), add = (k, grupo, e, txt, acc) => { if (!ign.has(k)) l.push({ k, grupo, e, txt, acc }); };
+  for (const e of S.ents) {
+    contradicciones(e).forEach(c => add('c:' + e.id + c.key, 'Choca con el lore oficial', e, e.nombre + ' ' + c.r.t + ' ' + c.d.nombre));
+    if (e.ficha && e.tipo !== 'personaje' && (!e.resumen?.trim() || (e.cuerpo || '').trim().length < 40)) add('i:' + e.id, 'Fichas flacas', e, !e.resumen?.trim() ? 'Sin resumen de una línea' : 'Descripción muy corta');
+    if (e.ficha && SUBTIPOS[e.tipo] && !e.sub && ['lugar', 'deidad', 'faccion'].includes(e.tipo)) add('s:' + e.id, 'Sin clase definida', e, TIPOS[e.tipo] + ' sin clase (ciudad, reino, región…)');
+    if (e.lore && Date.now() - e.lore.fecha > 120 * 864e5) add('l:' + e.id + ':' + e.lore.fecha, 'Lore oficial viejo', e, 'Traído el ' + fechaCorta(e.lore.fecha), () => traerLore(e, e.lore.titulo));
+  }
+  const todos = S.trans.map(t => t.original).join('\n\n');
+  if (todos) {
+    for (const [id, n] of contarMenciones(todos)) { const e = porId(id); if (e && !e.ficha && n >= 3) add('f:' + id, 'Mencionados sin ficha', e, n + ' menciones en transcripciones', () => { e.ficha = true; guardar(); Nav.ent = e.id; Nav.edit = true; Nav.ir('fichas'); }); }
+    candidatosNuevos(todos, 3).slice(0, 20).forEach(c => add('n:' + c.k, 'Nombres nuevos en transcripciones', null, c.orig + ' · ' + c.n + ' veces', () => { altaTermino(c.orig, adivinarTipo(todos, c.orig)); render(); }));
+  }
+  _rev = { S, n: _genGuardado, l }; return l;
+}
+let _preg = null;
+async function cargarPreguntas() { if (!NUBE.on || NUBE.rol !== 'dm' || !NUBE.cid) return []; try { const r = await FB.getDocs(FB.col('campanas', NUBE.cid, 'preg')); _preg = r.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.t - a.t); } catch (_) { _preg = []; } return _preg; }
+function vRevisar(root) {
+  const w = h('div', { class: 'ses revisar' }), l = pendientes(), grupos = new Map();
+  l.forEach(x => { if (!grupos.has(x.grupo)) grupos.set(x.grupo, []); grupos.get(x.grupo).push(x); });
+  w.append(h('p', { class: 'res' }, l.length ? 'Lo que conviene mirar para que la wiki quede al día. "Listo" lo saca de la lista.' : 'Nada pendiente. La wiki está al día.'));
+  const preg = h('div'); w.append(preg);
+  const pintarPreg = ps => { preg.innerHTML = ''; if (!ps?.length) return; preg.append(h('h3', {}, 'Lo que preguntaron los jugadores · ' + ps.length), ps.map(p => h('div', { class: 'sug' }, h('div', { class: 'f' }, '¿Quién es «' + p.q + '»?'), h('div', { class: 'm' }, p.quien + ' · ' + fechaCorta(p.t)),
+    h('div', { class: 'a' }, h('button', { class: 'btn sm pri', onclick: async () => { const e = buscarEnt(p.q) || altaTermino(p.q, 'pnj'); await FB.deleteDoc(FB.doc('campanas', NUBE.cid, 'preg', p.id)); e.ficha = true; guardar(); Nav.ent = e.id; Nav.edit = true; Nav.ir('fichas'); } }, 'Responder con ficha'),
+      h('button', { class: 'btn sm', onclick: async () => { await FB.deleteDoc(FB.doc('campanas', NUBE.cid, 'preg', p.id)); pintarPreg(_preg = _preg.filter(x => x.id !== p.id)); actualizarBadge(); } }, 'Borrar'))))); };
+  if (_preg) pintarPreg(_preg); cargarPreguntas().then(ps => { pintarPreg(ps); actualizarBadge(); });
+  for (const [g, xs] of grupos) w.append(h('h3', {}, g + ' · ' + xs.length), xs.slice(0, 40).map(x => h('div', { class: 'sug' }, h('div', { class: 'f' }, x.e ? h('a', { class: 'term', onclick: () => Nav.ir('fichas', x.e.id) }, x.e.nombre) : x.txt.split(' · ')[0]), h('div', { class: 'm' }, x.e ? x.txt : x.txt.split(' · ').slice(1).join(' · ')),
+    h('div', { class: 'a' }, x.acc ? h('button', { class: 'btn sm pri', onclick: x.acc }, g.startsWith('Lore') ? 'Actualizar' : 'Crear') : x.e ? h('button', { class: 'btn sm pri', onclick: () => { Nav.ent = x.e.id; Nav.edit = true; Nav.ir('fichas'); } }, 'Editar') : null,
+      h('button', { class: 'btn sm', onclick: () => { if (x.k.startsWith('n:')) S.ignoradas.push(x.k.slice(2)); else S.revIgn = [...(S.revIgn || []), x.k]; guardar(); render(); } }, x.k.startsWith('n:') ? 'No es' : 'Listo')))));
+  if (S.papelera?.length) w.append(h('h3', {}, 'Papelera · ' + S.papelera.length), S.papelera.map((x, i) => [x, i]).reverse().map(([x, i]) => h('div', { class: 'sug' }, h('div', { class: 'f' }, x.e.nombre), h('div', { class: 'm' }, 'Eliminada el ' + fechaCorta(x.t) + ' · ' + x.quien), h('div', { class: 'a' }, h('button', { class: 'btn sm', onclick: () => restaurarPapelera(i) }, 'Recuperar')))));
+  root.append(h('div', { class: 'col', style: { height: '100%' } }, w));
+}
+function actualizarBadge() { const b = document.querySelector('.top .rev-n'); if (b) { const n = pendientes().length + (_preg?.length || 0); b.textContent = n; b.parentElement.classList.toggle('hay', n > 0); } }
+
+/* ---------- 6. "Previously on…" ---------- */
+function recap(s) {
+  const dm = esDM(), nuevos = S.ents.filter(e => e.rev === s.n && e.ficha && (dm || visible(e)) && e.tipo !== 'personaje'), ts = S.trans.filter(t => t.ses === s.n && (dm || t.compartir));
+  const men = new Map(); ts.forEach(t => contarMenciones(t.original).forEach((n, id) => men.set(id, (men.get(id) || 0) + n)));
+  const top = [...men].map(([id, n]) => [porId(id), n]).filter(([e]) => e && (dm || visible(e))).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([e]) => e);
+  const rel = (S.tiempo?.relojes || []).filter(r => (dm || r.vis !== 'dm') && (r.lleno || 0) < r.seg);
+  const lst = es => es.map((e, i) => [i ? (i === es.length - 1 ? ' y ' : ', ') : '', h('a', { class: 'term', onclick: () => { ov.cerrar(); Nav.ir('fichas', e.id); } }, e.nombre)]);
+  const cuerpo = h('div', { class: 'recap' }, h('div', { class: 'lab' }, 'Sesión ' + s.n + (s.fecha ? ' · ' + fechaCorta(s.fecha + 'T12:00') : '')), h('h2', {}, s.titulo || 'Sin título'),
+    s.resumen ? h('div', { class: 'cuerpo', html: rich(s.resumen) }) : h('p', { class: 'empty' }, 'Esta sesión todavía no tiene resumen.'),
+    nuevos.length ? h('p', {}, h('b', {}, 'Aparecieron por primera vez: '), lst(nuevos), '.') : null, top.length ? h('p', {}, h('b', {}, 'Los nombres que más sonaron: '), lst(top), '.') : null,
+    rel.length ? h('p', {}, h('b', {}, 'Relojes en marcha: '), rel.map((r, i) => (i ? ' · ' : '') + r.nombre + ' (' + (r.lleno || 0) + '/' + r.seg + ')')) : null);
+  const leer = () => { try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance('Previamente, en ' + S.campana.nombre + '. ' + cuerpo.innerText.replace(/^Sesión \d+[^\n]*\n/, '')); u.lang = 'es-AR'; u.rate = .95; speechSynthesis.speak(u); } catch (_) { toast('Este dispositivo no puede leer en voz alta'); } };
+  const ov = modal('Previously on…', cuerpo, [{ txt: 'Leer en voz alta', fn: () => { leer(); return false; } }, { txt: 'Copiar', fn: () => { navigator.clipboard?.writeText('Previously on… ' + S.campana.nombre + '\n\n' + cuerpo.innerText).then(() => toast('Copiado')); return false; } }, { txt: 'Cerrar', pri: true, fn: () => { try { speechSynthesis.cancel(); } catch (_) { } } }]);
+}
+
+/* ---------- 10. "¿Quién es…?" ---------- */
+function quienEs(q0) {
+  const inp = h('input', { type: 'search', placeholder: 'Escribí un nombre, aunque sea como suena…', value: q0 || '' }), res = h('div', { style: { marginTop: '12px' } });
+  const tarjeta = e => h('div', { class: 'quien' }, e.imagen ? h('img', { src: e.imagen, alt: '' }) : null, h('div', { class: 'tipo' }, tipoTxt(e).toUpperCase()), h('h2', {}, e.nombre), e.resumen ? h('p', { class: 'res' }, e.resumen) : null, bloqueCampos(e),
+    e.cuerpo ? h('div', { class: 'cuerpo', html: rich(e.cuerpo.split(/\n\s*\n/)[0]) }) : null, h('button', { class: 'btn sm pri', onclick: () => { ov.cerrar(); Nav.ir('fichas', e.id); } }, 'Ver la ficha completa'));
+  const buscar = () => {
+    const q = inp.value.trim(), k = norm(q); res.innerHTML = ''; if (k.length < 2) return;
+    const vis = S.ents.filter(visible), exacto = vis.find(e => [e.nombre, ...(e.alias || []), ...(e.errores || [])].some(t => norm(t) === k)) || vis.find(e => norm(e.nombre).startsWith(k));
+    if (exacto) { res.append(tarjeta(exacto)); return; }
+    const kj = k.replace(/[^a-z0-9]/g, ''), kf = fono(q), cand = vis.map(e => { const t = norm(e.nombre).replace(/[^a-z0-9]/g, ''), L = Math.max(t.length, kj.length); return [e, Math.max(1 - levenshtein(kj, t) / L, kf.length > 2 ? 1 - levenshtein(kf, fono(e.nombre)) / Math.max(kf.length, fono(e.nombre).length) : 0, t.includes(kj) ? .8 : 0)]; }).filter(x => x[1] >= .6).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    if (cand.length) { res.append(h('p', { class: 'lab' }, '¿Quisiste decir…?')); cand.forEach(([e]) => res.append(h('div', { class: 'res-it', onclick: () => { inp.value = e.nombre; buscar(); } }, h('span', { class: 'n' }, e.nombre), h('span', { class: 't' }, tipoTxt(e))))); }
+    res.append(h('p', { class: 'empty' }, cand.length ? '' : 'Todavía no hay nada sobre «' + q + '».'), NUBE.on && NUBE.rol === 'jug' ? h('button', { class: 'btn sm', onclick: async ev => { ev.target.disabled = true; try { await FB.setDoc(FB.doc('campanas', NUBE.cid, 'preg', Date.now().toString(36) + Math.random().toString(36).slice(2, 6)), { q: q.slice(0, 100), quien: NUBE.user.nombre, t: Date.now() }); ev.target.textContent = 'Listo: le llegó al DM'; } catch (_) { ev.target.textContent = 'No se pudo enviar'; } } }, 'Preguntarle al DM') : null);
+  };
+  let t0; inp.addEventListener('input', () => { clearTimeout(t0); t0 = setTimeout(buscar, 200); });
+  const ov = modal('¿Quién es…?', h('div', {}, inp, res), [{ txt: 'Cerrar' }]); if (q0) buscar();
+}
+
 /* ===== navegación y vistas ===== */
 const Nav = {
   vista: 'atlas', ent: null, trans: null, edit: false, filtro: '', tipo: '', verTerminos: false, lista: false,
@@ -4268,7 +4638,7 @@ const VISTAS = [
   ['atlas', 'Atlas', 'mapa'], ['fichas', 'Fichas', 'libro'], ['glosario', 'Glosario', 'glos'], ['textos', 'Textos', 'pergamino'],
   ['relaciones', 'Vínculos', 'grafo'], ['tiempo', 'Tiempo', 'reloj'], ['sesiones', 'Sesiones', 'sesion'], ['hojas', 'Hojas', 'hoja'], ['ajustes', 'Ajustes', 'ajustes']
 ];
-const TITULOS = { atlas: 'Atlas', fichas: 'Fichas', glosario: 'Glosario', textos: 'Transcripciones', relaciones: 'Vínculos', tiempo: 'Tiempo', sesiones: 'Sesiones', hojas: 'Hojas de combate', ajustes: 'Ajustes' };
+const TITULOS = { atlas: 'Atlas', fichas: 'Fichas', glosario: 'Glosario', textos: 'Transcripciones', relaciones: 'Vínculos', tiempo: 'Tiempo', sesiones: 'Sesiones', hojas: 'Hojas de combate', ajustes: 'Ajustes', revisar: 'Por revisar' };
 
 function acercaDe() {
   modal('Acerca de Růnica', h('div', { class: 'acerca' }, h('img', { src: MARCA.logo, alt: 'Růnica' }), h('p', { class: 'codex' }, '— Campaign Codex —'), h('p', {}, 'Códice de campaña para D&D · versión ' + VERSION), h('p', {}, 'Campaña: ' + S.campana.nombre), h('p', { style: { fontSize: '13px', color: 'var(--mut)' } }, 'Todo se guarda en este dispositivo y funciona sin internet.')), [{ txt: 'Cerrar', pri: true }]);
@@ -4284,11 +4654,13 @@ function render() {
     SOLO_LECTURA ? h('span', { class: 'tag-ro' }, 'Versión para jugadores · sesión ' + S.ses) : [
       h('select', { style: { width: 'auto' }, title: 'Sesión en juego', onchange: e => { S.ses = +e.target.value; guardar(); render(); } }, S.sesiones.map(s => h('option', { value: s.n, selected: s.n === S.ses }, 'Sesión ' + s.n))),
       h('div', { class: 'seg ' + (S.modo === 'dm' ? 'dm' : '') }, [['grupo', 'Grupo'], ['dm', 'DM']].map(([v, n]) => h('button', { 'data-v': v, class: S.modo === v ? 'on' : '', onclick: () => { S.modo = v; guardar(); render(); } }, n)))],
+    esDM() ? h('button', { class: 'btn rev', title: 'Lo pendiente para mantener la wiki al día', onclick: () => Nav.ir('revisar'), html: '<svg viewBox="0 0 24 24" width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:1.6"><path d="M4 6l2 2 3-3M4 13l2 2 3-3M12 7h8M12 14h8M4 20h16"/></svg> Revisar <span class="rev-n"></span>' }) : h('button', { class: 'btn', title: 'Buscá a alguien o algo de la campaña', onclick: () => quienEs(), html: '<svg viewBox="0 0 24 24" width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:1.6"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/></svg> ¿Quién es?' }),
     h('button', { class: 'btn', title: 'Buscar (Ctrl+K)', onclick: buscador, html: '<svg viewBox="0 0 24 24" width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:1.6"><circle cx="11" cy="11" r="6"/><path d="M16 16l5 5"/></svg> Buscar' }));
   const main = h('main', { class: 'main', id: 'vista' });
   app.append(h('div', { class: 'shell' }, rail, top, main));
-  ({ atlas: vAtlas, fichas: vFichas, glosario: vGlosario, textos: vTextos, relaciones: vGrafo, tiempo: vTiempo, sesiones: vSesiones, hojas: vHojas, ajustes: vAjustes })[S.conHojas || Nav.vista !== 'hojas' ? Nav.vista : 'atlas'](main);
+  ({ atlas: vAtlas, fichas: vFichas, glosario: vGlosario, textos: vTextos, relaciones: vGrafo, tiempo: vTiempo, sesiones: vSesiones, hojas: vHojas, ajustes: vAjustes, revisar: vRevisar })[S.conHojas || Nav.vista !== 'hojas' ? Nav.vista : 'atlas'](main);
   if (pst) { const np = document.querySelector('.split .pane'); if (np) np.scrollTop = pst; }
+  if (esDM()) setTimeout(actualizarBadge, 0);
 }
 
 /* ---------- Atlas ---------- */
@@ -4312,7 +4684,7 @@ function vFichas(root) {
   const coincide = e => (!Nav.tipo || e.tipo === Nav.tipo) && (e.ficha || Nav.verTerminos) && (!q || [e.nombre, ...(e.alias || []), ...(e.errores || [])].some(t => norm(t).includes(q)));
   const lista = h('div', { class: 'tree' });
   const fila = (e, nivel = 0, tg = '') => h('div', { class: 'it' + (cur?.id === e.id ? ' on' : '') + (e.ficha ? '' : ' nofi') + (e.vis === 'dm' ? ' sec' : ''), style: { paddingLeft: 8 + nivel * 16 + 'px' }, onclick: () => { Nav.ent = e.id; Nav.edit = false; Nav.lista = false; render(); } },
-    h('span', { class: 'tg' }, tg), h('span', { class: 'dot ' + (e.vis === 'dm' ? 'dm' : e.tipo === 'personaje' ? 'pj' : e.ficha ? '' : 'mu') }), e.nombre, h('span', { class: 'ty' }, TIPOS[e.tipo]));
+    h('span', { class: 'tg' }, tg), h('span', { class: 'dot ' + (e.vis === 'dm' ? 'dm' : e.tipo === 'personaje' ? 'pj' : e.ficha ? '' : 'mu') }), e.nombre, h('span', { class: 'ty' }, e.sub || TIPOS[e.tipo]));
   const arbolLugar = (e, nivel) => { const ks = S.ents.filter(x => x.padre === e.id && x.tipo === 'lugar' && visible(x) && (x.ficha || Nav.verTerminos || S.ents.some(y => y.padre === x.id))); const cz = (S.ajustes.cerrados = S.ajustes.cerrados || {}), cerrado = !!cz['n:' + e.id] && !q; const f = fila(e, nivel, ks.length ? (cerrado ? '▸' : '▾') : ''); if (ks.length) { const tgl = f.querySelector('.tg'); tgl.classList.add('clic'); tgl.title = cerrado ? 'Expandir' : 'Colapsar'; tgl.onclick = ev => { ev.stopPropagation(); cz['n:' + e.id] = !cz['n:' + e.id]; guardar(); render(); }; } lista.append(f); if (!cerrado) ks.sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach(k => arbolLugar(k, nivel + 1)); };
   const visibles = S.ents.filter(visible);
   if (q || Nav.tipo && Nav.tipo !== 'lugar') {
@@ -4342,12 +4714,16 @@ function fichaVista(e) {
   { const bn = e.imagen ? null : imagenOficial(e); if (bn) el.append(bn); }
   el.append(h('div', { class: 'bc' }, h('a', { onclick: () => { Nav.lista = true; render(); } }, 'Fichas'), ch.map(c => [' / ', h('a', { onclick: () => Nav.ir('fichas', c.id) }, c.nombre)])),
     e.imagen ? h('div', { class: 'retrato' }, h('img', { src: e.imagen })) : null,
-    h('div', { class: 'tipo', style: { marginTop: '8px' } }, TIPOS[e.tipo].toUpperCase() + (e.vis === 'dm' ? ' · SOLO DM' : '') + (e.jugador && dm ? ' · jugador: ' + e.jugador : '')),
+    h('div', { class: 'tipo', style: { marginTop: '8px' } }, tipoTxt(e).toUpperCase() + (e.vis === 'dm' ? ' · SOLO DM' : '') + (e.jugador && dm ? ' · jugador: ' + e.jugador : '')),
     h('h2', {}, e.nombre), h('div', { class: 'orn', style: { backgroundImage: 'url(' + MARCA.div2 + ')', backgroundPosition: 'left center' } }));
   if (e.alias?.length || (dm && e.errores?.length)) el.append(h('div', { class: 'chips' }, (e.alias || []).map(a => h('span', { class: 'chip al' }, a)), dm ? (e.errores || []).map(a => h('span', { class: 'chip er', title: 'Grafía incorrecta que se corrige sola' }, h('b', {}, 'no: '), a)) : null));
   if (e.resumen) el.append(h('p', { class: 'res' }, e.resumen));
+  { const bc = bloqueCampos(e); if (bc) el.append(bc); }
+  if (e.lore && (e.cuerpo || '').trim() && (dm || !e.lore.oculto)) el.append(h('div', { class: 'lab capa' }, 'En nuestra mesa'));
   el.append(h('div', { class: 'cuerpo', html: rich(e.cuerpo) }));
+  { const x = bloqueDesvio(e); if (x) el.append(x); const c = avisoContradicciones(e); if (c) el.append(c); }
   if (dm && e.secreto) el.append(h('div', { class: 'secreto' }, h('div', { class: 'lab' }, 'Solo para el DM'), h('div', { class: 'cuerpo', html: rich(e.secreto) })));
+  { const sg = sugerenciaLore(e), bl = bloqueLore(e); if (sg) el.append(sg); if (bl) el.append(bl); }
   if (dm) el.append(nombreOficialUI(e), bloqueOficial(e));
   if (dm && e.nombreOficial && !e.libroCargado && !(Nav._of = Nav._of || {})[e.id]) { Nav._of[e.id] = 1; cargarOficial(e).then(ok => { if (ok && Nav.ent === e.id) render(); }).catch(() => { }); }
   if (!e.ficha) el.append(h('div', { class: 'aviso' }, 'Es un término del glosario, todavía sin ficha completa.'));
@@ -4359,7 +4735,7 @@ function fichaVista(e) {
   const acc = h('div', { class: 'bloque', style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } });
   if (pin && S.mapa) acc.append(h('button', { class: 'btn', onclick: () => { Atlas.pendiente = { x: pin.x, y: pin.y }; Atlas.sel = { tipo: 'pin', id: pin.id }; Nav.ir('atlas'); } }, 'Ver en el atlas'));
   if (S.conHojas && e.tipo === 'personaje' && HOJA_PJ[e.id]) acc.append(h('button', { class: 'btn', onclick: () => Nav.irHoja(e.id + '.html') }, 'Hoja de combate'), h('button', { class: 'btn', onclick: () => Nav.irHoja(e.id + '-dossier.html') }, 'Dossier'));
-  if (dm) acc.append(h('button', { class: 'btn pri', onclick: () => { Nav.edit = true; render(); } }, e.ficha ? 'Editar ficha' : 'Crear ficha'), h('button', { class: 'btn peligro', onclick: () => borrarEntidad(e) }, 'Eliminar'));
+  if (dm) acc.append(h('button', { class: 'btn pri', onclick: () => { Nav.edit = true; render(); } }, e.ficha ? 'Editar ficha' : 'Crear ficha'), h('button', { class: 'btn', onclick: () => historial(e) }, 'Historial' + (S.hist?.[e.id]?.length ? ' (' + S.hist[e.id].length + ')' : '')), e.lore ? null : h('button', { class: 'btn', onclick: () => elegirLore(e) }, 'Lore oficial'), h('button', { class: 'btn peligro', onclick: () => borrarEntidad(e) }, 'Eliminar'));
   if (acc.children.length) el.append(acc);
   return el;
 }
@@ -4509,7 +4885,8 @@ function nuevaEntidad(tipo, nombre, cb) {
   } }]);
 }
 function borrarEntidad(e) {
-  modal('Eliminar', h('p', {}, `¿Eliminar "${e.nombre}"? Se quita de las fichas, del glosario y de los vínculos. No se puede deshacer.`), [{ txt: 'Cancelar' }, { txt: 'Eliminar', pri: true, fn: () => {
+  modal('Eliminar', h('p', {}, `¿Eliminar "${e.nombre}"? Se quita de las fichas, del glosario y de los vínculos. Queda en la papelera (Revisar) por si te arrepentís.`), [{ txt: 'Cancelar' }, { txt: 'Eliminar', pri: true, fn: () => {
+    aPapelera(e);
     S.ents = S.ents.filter(x => x.id !== e.id); S.ents.forEach(x => { x.rel = (x.rel || []).filter(r => r.d !== e.id); if (x.padre === e.id) x.padre = e.padre || null; });
     if (S.mapa) S.mapa.pines = S.mapa.pines.filter(p => p.ent !== e.id); invalidarIdx(); guardar(); Nav.ent = null; render();
   } }]);
@@ -4519,6 +4896,7 @@ function editorFicha(e) {
   const campo = (lab, el) => [h('label', { class: 'lab f' }, lab), el];
   const el = h('article', { class: 'ficha' });
   f.nombre = h('input', { type: 'text', value: e.nombre }); f.tipo = h('select', {}, Object.entries(TIPOS).map(([k, v]) => h('option', { value: k, selected: k === e.tipo }, v)));
+  const CE = camposEditor(e, f);
   f.alias = h('input', { type: 'text', value: (e.alias || []).join(', '), placeholder: 'Otras formas válidas de nombrarlo, separadas por coma' });
   f.errores = h('input', { type: 'text', value: (e.errores || []).join(', '), placeholder: 'Grafías incorrectas que se corrigen solas' });
   f.resumen = h('input', { type: 'text', value: e.resumen || '' });
@@ -4531,12 +4909,14 @@ function editorFicha(e) {
   let rels = clonar(e.rel || []); let img = e.imagen || '';
   const relBox = h('div'); const pintarRels = () => { relBox.innerHTML = ''; rels.forEach((r, i) => relBox.append(h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1.3fr auto', gap: '6px', marginBottom: '6px' } }, h('input', { type: 'text', value: r.t, placeholder: 'hermano de, dirige, vive en…', oninput: ev => r.t = ev.target.value }), h('select', { onchange: ev => r.d = ev.target.value }, S.ents.filter(x => x.id !== e.id).sort((a, b) => a.nombre.localeCompare(b.nombre)).map(x => h('option', { value: x.id, selected: x.id === r.d }, x.nombre))), h('button', { class: 'btn sm', onclick: () => { rels.splice(i, 1); pintarRels(); } }, '×')))); }; pintarRels();
   const imgBox = h('div'); const pintarImg = () => { imgBox.innerHTML = ''; if (img) imgBox.append(h('img', { src: img, style: { maxWidth: '160px', borderRadius: '6px', display: 'block', marginBottom: '6px' } })); imgBox.append(h('label', { class: 'btn sm' }, img ? 'Cambiar retrato' : 'Subir retrato', h('input', { type: 'file', accept: 'image/*', class: 'hide', onchange: async ev => { const fi = ev.target.files[0]; if (fi) { img = await achicarImagen(fi, 640); pintarImg(); } } })), img ? h('button', { class: 'btn sm', style: { marginLeft: '6px' }, onclick: () => { img = ''; pintarImg(); } }, 'Quitar') : null); }; pintarImg();
-  el.append(...[h('div', { class: 'tipo' }, 'EDITANDO'), h('h2', {}, e.nombre), campo('Nombre', f.nombre), campo('Tipo', f.tipo), campo('Alias válidos', f.alias), campo('Grafías incorrectas (se corrigen y enlazan solas)', f.errores), campo('Resumen de una línea', f.resumen), campo('Descripción (lo que sabe el grupo)', f.cuerpo),
+  el.append(...[h('div', { class: 'tipo' }, 'EDITANDO'), h('h2', {}, e.nombre), campo('Nombre', f.nombre), campo('Tipo', f.tipo), CE.caja, campo('Alias válidos', f.alias), campo('Grafías incorrectas (se corrigen y enlazan solas)', f.errores), campo('Resumen de una línea', f.resumen), campo('Descripción (lo que sabe el grupo)', f.cuerpo), detector(f.cuerpo), campo('Dónde se aparta del lore oficial (lo ven los jugadores)', f.desvio),
     campo('Notas solo para el DM', f.secreto), campo('Está dentro de…', f.padre), campo('Visibilidad', f.vis), campo('Se revela en la sesión', f.rev), e.tipo === 'personaje' ? campo('Jugador', f.jugador) : null,
     h('label', { class: 'lab f' }, 'Retrato'), imgBox, h('label', { class: 'lab f' }, 'Vínculos'), relBox, h('button', { class: 'btn sm', onclick: () => { rels.push({ t: '', d: S.ents.find(x => x.id !== e.id).id }); pintarRels(); } }, '+ Vínculo'),
     h('div', { style: { display: 'flex', gap: '8px', marginTop: '24px' } }, h('button', { class: 'btn pri', onclick: () => {
       const n = f.nombre.value.trim(); if (!n) return toast('Falta el nombre');
-      Object.assign(e, { nombre: n, tipo: f.tipo.value, alias: lista(f.alias.value), errores: lista(f.errores.value), resumen: f.resumen.value.trim(), cuerpo: f.cuerpo.value, secreto: f.secreto.value, padre: f.padre.value || null, vis: f.vis.value, rev: +f.rev.value || 1, jugador: f.jugador.value.trim(), rel: rels.filter(r => r.t.trim()), imagen: img, retratoQuitado: !img, ficha: true });
+      anotarHist(e, e.ficha ? 'Edición' : 'Ficha creada');
+      const cps = {}; for (const [k, v] of Object.entries(CE.est.campos)) if (String(v).trim()) cps[k] = String(v).trim();
+      Object.assign(e, { sub: (SUBTIPOS[f.tipo.value] || []).includes(CE.est.sub) ? CE.est.sub : '', campos: cps, desvio: f.desvio.value, nombre: n, tipo: f.tipo.value, alias: lista(f.alias.value), errores: lista(f.errores.value), resumen: f.resumen.value.trim(), cuerpo: f.cuerpo.value, secreto: f.secreto.value, padre: f.padre.value || null, vis: f.vis.value, rev: +f.rev.value || 1, jugador: f.jugador.value.trim(), rel: rels.filter(r => r.t.trim()), imagen: img, retratoQuitado: !img, ficha: true });
       invalidarIdx(); guardar(); Nav.edit = false; render(); toast('Ficha guardada');
     } }, 'Guardar'), h('button', { class: 'btn', onclick: () => { Nav.edit = false; render(); } }, 'Cancelar'))].flat());
   return el;
@@ -4625,7 +5005,7 @@ function vTextos(root) {
   const cur = lista.find(t => t.id === Nav.trans) || null;
   const pane = h('aside', { class: 'col pane' });
   pane.append(h('div', { style: { padding: '12px', display: 'grid', gap: '8px' } },
-    dm ? h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, h('label', { class: 'btn pri sm' }, 'Subir archivo', h('input', { type: 'file', accept: '.txt,.md,.srt,.vtt,text/plain', multiple: true, class: 'hide', onchange: async e => { for (const f of e.target.files) altaTranscripcion(f.name.replace(/\.[^.]+$/, ''), await f.text()); e.target.value = ''; } })), h('button', { class: 'btn sm', onclick: () => preguntarTexto() }, 'Pegar texto')) : null,
+    dm ? h('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap' } }, ((window.SpeechRecognition || window.webkitSpeechRecognition) ? h('button', { class: 'btn sm', onclick: dictar }, 'Dictar') : null), h('label', { class: 'btn pri sm' }, 'Subir archivo', h('input', { type: 'file', accept: '.txt,.md,.srt,.vtt,text/plain', multiple: true, class: 'hide', onchange: async e => { for (const f of e.target.files) altaTranscripcion(f.name.replace(/\.[^.]+$/, ''), await f.text()); e.target.value = ''; } })), h('button', { class: 'btn sm', onclick: () => preguntarTexto() }, 'Pegar texto')) : null,
     !lista.length ? h('p', { class: 'empty' }, dm ? 'Todavía no hay transcripciones. Subí el .txt de una grabación o pegá el texto.' : 'No hay transcripciones compartidas.') : null));
   const ls = h('div', { class: 'tree' }); lista.slice().sort((a, b) => (a.ses || 0) - (b.ses || 0)).forEach(t => ls.append(h('div', { class: 'it' + (cur?.id === t.id ? ' on' : ''), onclick: () => { Nav.trans = t.id; Nav.mod = Nav.mod || 'fmt'; render(); } }, h('span', { class: 'dot' }), t.titulo, h('span', { class: 'ty' }, t.ses ? 'S' + t.ses : '')))); pane.append(ls);
   const centro = h('section', { class: 'col' }), lado = h('aside', { class: 'col panel', style: { display: 'block' } });
@@ -4651,6 +5031,7 @@ function vTextos(root) {
       sug.slice(0, 40).forEach(s => lado.append(h('div', { class: 'sug' }, h('div', { class: 'f' }, h('s', {}, s.orig), ' → ', s.ents.map(([id, sc], i) => [i ? ' o ' : '', h('b', {}, porId(id).nombre)])), h('div', { class: 'm' }, s.n + (s.n === 1 ? ' vez' : ' veces') + ' · «…' + s.ctx + '…»'),
         h('div', { class: 'a' }, ...s.ents.map(([id]) => h('button', { class: 'btn sm pri', title: 'Es ' + porId(id).nombre, onclick: () => { const e = porId(id); e.errores = [...(e.errores || []), s.orig]; invalidarIdx(); guardar(); render(); toast(`"${s.orig}" ahora se corrige a ${e.nombre}`); } }, 'Es ' + porId(id).nombre.split(' ')[0])), h('button', { class: 'btn sm', title: 'Ignorar', onclick: () => { S.ignoradas.push(s.key); guardar(); render(); } }, '×')))));
     }
+    if (dm) lado.append(panelPropuestas(cur));
     lado.append(h('div', { class: 'lab', style: { marginTop: '16px' } }, 'Términos reconocidos · ' + men.length));
     men.forEach(({ e, n }) => lado.append(h('div', { class: 'freq', onclick: () => Nav.ir('fichas', e.id) }, h('span', {}, e.nombre), h('b', {}, n))));
     if (dm) lado.append(h('div', { style: { marginTop: '20px' } }, h('button', { class: 'btn peligro sm', onclick: () => modal('Eliminar transcripción', h('p', {}, `¿Eliminar "${cur.titulo}"? Se pierde el texto guardado en la app.`), [{ txt: 'Cancelar' }, { txt: 'Eliminar', pri: true, fn: () => { S.trans = S.trans.filter(t => t.id !== cur.id); Nav.trans = null; guardar(); render(); } }]) }, 'Eliminar')));
@@ -4780,14 +5161,14 @@ function vGrafo(root) {
 /* ---------- Sesiones ---------- */
 function vSesiones(root) {
   const dm = esDM(); const wrap = h('div', { class: 'ses' });
-  if (dm) wrap.append(h('div', { style: { textAlign: 'right' } }, h('button', { class: 'btn', onclick: () => editarSesion() }, '+ Sesión')));
+  { const ult = S.sesiones.filter(x => x.n <= S.ses).sort((a, b) => b.n - a.n)[0]; wrap.append(h('div', { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' } }, ult ? h('button', { class: 'btn pri', onclick: () => recap(ult) }, 'Previously on…') : null, dm ? h('button', { class: 'btn', onclick: () => editarSesion() }, '+ Sesión') : null)); }
   for (const s of S.sesiones.filter(x => dm || x.n <= S.ses)) {
     const nuevos = S.ents.filter(e => e.rev === s.n && e.ficha && (dm || visible(e))), ts = S.trans.filter(t => t.ses === s.n && (dm || t.compartir));
     wrap.append(h('div', { class: 's' }, h('div', { class: 'num' }, s.n), h('div', {}, h('h3', {}, s.titulo), h('div', { class: 'lab' }, s.fecha ? new Date(s.fecha + 'T12:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'sin fecha'),
       h('div', { class: 'cuerpo', style: { margin: '10px 0' }, html: rich(s.resumen) }),
       nuevos.length ? h('div', {}, h('div', { class: 'lab', style: { margin: '10px 0 4px' } }, 'Se conoce desde acá'), h('div', { class: 'chips' }, nuevos.map(e => h('a', { class: 'chip', style: { cursor: 'pointer' }, onclick: () => Nav.ir('fichas', e.id) }, e.nombre)))) : null,
       ts.length ? h('div', { class: 'chips' }, ts.map(t => h('a', { class: 'chip', style: { cursor: 'pointer' }, onclick: () => Nav.ir('textos', t.id) }, 'Transcripción: ' + t.titulo))) : null,
-      dm ? h('button', { class: 'btn sm', style: { marginTop: '8px' }, onclick: () => editarSesion(s) }, 'Editar') : null)));
+      h('div', { style: { display: 'flex', gap: '6px', marginTop: '8px' } }, h('button', { class: 'btn sm', onclick: () => recap(s) }, 'Recap'), dm ? h('button', { class: 'btn sm', onclick: () => editarSesion(s) }, 'Editar') : null))));
   }
   root.append(h('div', { class: 'col', style: { height: '100%' } }, wrap));
 }
@@ -4799,10 +5180,10 @@ function editarSesion(s) {
 /* ---------- Ajustes ---------- */
 function estadoParaJugadores() {
   const e = clonar(S); e.modo = 'grupo'; const ses = e.ses;
-  e.ents = e.ents.filter(x => x.vis !== 'dm' && x.rev <= ses).map(x => { const y = { ...x, secreto: '' }; if (x.nombreOficial) y.imgOf = { n: x.nombreOficial.n, s: x.nombreOficial.s }; delete y.oficial; delete y.nombreOficial; return y; });
+  e.ents = e.ents.filter(x => x.vis !== 'dm' && x.rev <= ses).map(x => { const y = { ...x, secreto: '' }; delete y.okContra; delete y.loreNo; if (y.lore?.oculto) delete y.lore; if (x.nombreOficial) y.imgOf = { n: x.nombreOficial.n, s: x.nombreOficial.s }; delete y.oficial; delete y.nombreOficial; return y; });
   const ids = new Set(e.ents.map(x => x.id)); e.ents.forEach(x => { x.rel = (x.rel || []).filter(r => ids.has(r.d)); if (x.padre && !ids.has(x.padre)) x.padre = null; });
   { const T = e.tiempo; T.relojes = T.relojes.filter(r => r.vis !== 'dm' && (!r.ent || ids.has(r.ent))).map(r => ({ ...r })); T.eventos = T.eventos.filter(x => x.vis !== 'dm' && (x.rev || 0) <= ses && (!x.ent || ids.has(x.ent))); }
-  e.trans = e.trans.filter(t => t.compartir); e.ignoradas = []; e.sesiones = e.sesiones.filter(s => s.n <= ses);
+  e.trans = e.trans.filter(t => t.compartir); e.ignoradas = []; e.hist = {}; e.papelera = []; e.revIgn = []; if (e.ajustes) delete e.ajustes.descVinc; e.sesiones = e.sesiones.filter(s => s.n <= ses);
   const m = e.mapa;
   // aplanar el mapa tal como lo ve el grupo (la niebla queda horneada en la imagen)
   const modo = S.modo; S.modo = 'grupo'; const cap = { ...Atlas.capas }; Atlas.capas.pines = false; Atlas.capas.niebla = true; Atlas.capas.relieve = true; Atlas.capas.rutas = true; Atlas.capas.etiquetas = true;
