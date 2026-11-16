@@ -15,7 +15,7 @@ self.addEventListener('fetch', e => {
 // Avisos push (los manda el Worker de Cloudflare; el contenido viaja cifrado: t=título, c=texto, u=link)
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data.json(); } catch (_) { }
-  e.waitUntil(self.registration.showNotification(d.t || 'Růnica', { body: d.c || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: d.e || 'runica', data: { u: d.u || './' } }));
+  e.waitUntil(self.registration.showNotification(d.t || 'Růnica', { body: d.c || '', icon: 'icon-192.png', badge: 'badge-96.png', tag: d.e || 'runica', data: { u: d.u || './' } }));
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close(); const url = new URL((e.notification.data && e.notification.data.u) || './', self.registration.scope).href;
