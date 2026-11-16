@@ -228,7 +228,7 @@ a.rota{color:var(--brasa)}
   .hintg{position:absolute;left:12px;right:12px;bottom:10px;font-size:13px;opacity:.75;background:#0e1013d9;padding:6px 10px;border-radius:8px;pointer-events:none}
   .tb button{min-width:54px;min-height:48px}
   .split{grid-template-columns:1fr!important}
-  .split>.pane{display:none}.split.lista>.pane{display:block}.split.lista>.col{display:none}
+  .split>.pane{display:none}.split.lista>.pane{display:block}.split.lista>.col:not(.pane){display:none}
   .ficha{padding:18px 16px 80px}.ficha h2{font-size:38px}.retrato{float:none;width:100%;margin:0 0 12px}
   .atlas{grid-template-columns:1fr!important;grid-template-rows:1fr auto}
   .tb{flex-direction:row;width:auto;overflow-x:auto;border-right:0;border-top:1px solid var(--linea);order:2;padding:4px}
@@ -479,7 +479,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.6.0';
+const VERSION = '0.6.1';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -4650,7 +4650,7 @@ function render() {
   const rail = h('nav', { class: 'rail' }, h('div', { class: 'logo', title: 'Růnica · ' + S.campana.nombre, style: { backgroundImage: 'url(' + MARCA.insignia + ')' }, onclick: acercaDe }),
     VISTAS.filter(v => !(SOLO_LECTURA && v[0] === 'ajustes') && !(v[0] === 'hojas' && !S.conHojas)).map(([id, nom, ic]) => h('button', { class: Nav.vista === id ? 'on' : '', onclick: () => Nav.ir(id), html: `<svg viewBox="0 0 24 24"><path d="${ICON[ic]}"/></svg><span>${nom}</span>` })));
   const top = h('header', { class: 'top' }, h('h1', {}, TITULOS[Nav.vista]), (SOLO_LECTURA && !NUBE.on ? h('span', { class: 'camp' }, S.campana.nombre) : h('button', { class: 'camp', title: 'Cambiar de campaña', onclick: selectorCampana }, S.campana.nombre + ' ▾')), h('span', { class: 'grow' }),
-    NUBE.on && NUBE.rol === 'dm' ? h('button', { class: 'btn', title: 'Publicar a los jugadores', onclick: nubePublicar }, 'Publicar') : null,
+    NUBE.on && NUBE.rol === 'dm' ? h('button', { class: 'btn', title: 'Publicar a los jugadores', onclick: nubePublicar, html: '<svg viewBox="0 0 24 24" width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:1.6"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg> Publicar' }) : null,
     SOLO_LECTURA ? h('span', { class: 'tag-ro' }, 'Versión para jugadores · sesión ' + S.ses) : [
       h('select', { style: { width: 'auto' }, title: 'Sesión en juego', onchange: e => { S.ses = +e.target.value; guardar(); render(); } }, S.sesiones.map(s => h('option', { value: s.n, selected: s.n === S.ses }, 'Sesión ' + s.n))),
       h('div', { class: 'seg ' + (S.modo === 'dm' ? 'dm' : '') }, [['grupo', 'Grupo'], ['dm', 'DM']].map(([v, n]) => h('button', { 'data-v': v, class: S.modo === v ? 'on' : '', onclick: () => { S.modo = v; guardar(); render(); } }, n)))],
