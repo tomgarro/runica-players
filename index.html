@@ -435,6 +435,16 @@ details.ed-mas>summary{font-size:13px}
 .chk{display:flex;align-items:center;gap:8px;margin:6px 0;color:var(--txt2);cursor:pointer}
 .avisos{margin-top:6px}
 
+.ajus details.aj{border:1px solid var(--linea);border-radius:8px;margin:0 0 8px;background:var(--panel)}
+.ajus details.aj>summary{display:flex;justify-content:space-between;align-items:center;padding:13px 14px;cursor:pointer;list-style:none;font-family:var(--f-label);letter-spacing:.05em;color:var(--txt)}
+.ajus details.aj>summary::-webkit-details-marker{display:none}
+.ajus details.aj>summary::after{content:"▾";color:var(--mut);transition:transform .2s}
+.ajus details.aj[open]>summary::after{transform:rotate(180deg)}
+.ajus details.aj[open]>summary{border-bottom:1px solid var(--linea)}
+.ajus .secc{padding:12px 14px 14px}
+@media (prefers-reduced-motion:reduce){.ajus details.aj>summary::after{transition:none}}
+.ajus label.sw{display:flex;gap:8px;align-items:flex-start;margin:10px 0}.ajus label.sw input{margin-top:5px}
+
 </style>
 </head>
 <body>
@@ -570,7 +580,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.9.2';
+const VERSION = '0.9.3';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -5078,7 +5088,7 @@ async function pushActivar() {
 async function pushDesactivar() { const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); if (!sub) return; const j = sub.toJSON(); try { await FB.deleteDoc(FB.doc('campanas', NUBE.cid, 'push', await _idSub(j))); } catch (_) { } await sub.unsubscribe(); }
 function bloqueAvisos() {
   const w = h('div', { class: 'avisos' }), caja = h('div');
-  w.append(h('h3', {}, 'Avisos en este dispositivo'), caja);
+  w.append(caja);
   const pintar = async () => {
     caja.innerHTML = '';
     if (!pushOk()) { caja.append(h('p', {}, /iphone|ipad|ipod/i.test(navigator.userAgent) ? 'En iPhone primero instalá la app: Compartir → «Agregar a pantalla de inicio», y abrila desde el ícono.' : 'Este navegador no soporta avisos.')); return; }
@@ -5162,7 +5172,7 @@ function acercaDe() {
   modal('Acerca de Růnica', h('div', { class: 'acerca' }, h('img', { src: MARCA.logo, alt: 'Růnica' }), h('p', { class: 'codex' }, '— Campaign Codex —'), h('p', {}, 'Códice de campaña para D&D · versión ' + VERSION), h('p', {}, 'Campaña: ' + S.campana.nombre), h('p', { style: { fontSize: '13px', color: 'var(--mut)' } }, 'Todo se guarda en este dispositivo y funciona sin internet.')), [{ txt: 'Cerrar', pri: true }]);
 }
 const GRUPOS = { fichas: [['fichas', 'Fichas'], ['glosario', 'Glosario'], ['relaciones', 'Vínculos'], ['cronologia', 'Cronología']], sesiones: [['sesiones', 'Sesiones'], ['preparar', 'Preparar'], ['misiones', 'Misiones'], ['tiempo', 'Tiempo'], ['tablas', 'Tablas'], ['textos', 'Transcripciones']], grupo: [['hojas', 'Hojas'], ['inventario', 'Inventario'], ['handouts', 'Handouts'], ['diarios', 'Diarios']] };
-const subVisible = v => !((v === 'textos' && !esDM() && !S.trans.some(t => t.compartir)) || (['preparar', 'tablas'].includes(v) && !esDM()) || (v === 'hojas' && !S.conHojas));
+const subVisible = v => !((v === 'tiempo' && !(S.ajustes || {}).verTiempo) || (v === 'textos' && !esDM() && !S.trans.some(t => t.compartir)) || (['preparar', 'tablas'].includes(v) && !esDM()) || (v === 'hojas' && !S.conHojas));
 const grupoDe = v => Object.keys(GRUPOS).find(g => GRUPOS[g].some(x => x[0] === v)) || v;
 const ICO = (d, txt) => `<svg viewBox="0 0 24 24" width="16" height="16" style="stroke:currentColor;fill:none;stroke-width:1.6"><path d="${d}"/></svg>` + (txt ? ' ' + txt : '');
 const puedeEditar = () => !SOLO_LECTURA;
@@ -5749,10 +5759,21 @@ function exportarJugadores() {
   download(`${S.campana.abrev || 'campana'}-jugadores-sesion${ses}.html`, '<!doctype html>\n' + doc.outerHTML, 'text/html');
   toast('Versión para jugadores lista: no lleva notas del DM ni zonas sin revelar');
 }
+/* Ajustes en secciones plegables: cada <h3> abre una sección con lo que tiene debajo; la primera arranca abierta. */
+const ORDEN_AJUSTES = ['Campaña', 'Avisos en este dispositivo', 'Acceso a la campaña', 'Publicación', 'Cuenta', 'Copia de seguridad', 'Versión para jugadores (archivo)', 'Actualizar la app', 'Créditos y licencias', 'Zona de riesgo'];
+function agruparAjustes(w) {
+  const gs = [], pie = []; let g = null;
+  for (const el of [...w.children]) { if (el.tagName === 'H3') { g = { t: el.textContent, els: [] }; gs.push(g); } else if (el.classList.contains('empty')) pie.push(el); else if (g) g.els.push(el); }
+  const pos = t => { const i = ORDEN_AJUSTES.indexOf(t); return i < 0 ? 99 : i; };
+  gs.sort((a, b) => pos(a.t) - pos(b.t)); w.innerHTML = '';
+  gs.forEach((x, i) => w.append(h('details', { class: 'aj', open: i === 0 }, h('summary', {}, x.t), h('div', { class: 'secc' }, x.els))));
+  w.append(...pie);
+}
 function vAjustes(root) {
   const w = h('div', { class: 'ajus' });
   const nom = h('input', { type: 'text', value: S.campana.nombre, onchange: e => { S.campana.nombre = e.target.value; guardar(); render(); } });
   w.append(h('h3', {}, 'Campaña'), nom,
+    h('label', { class: 'sw' }, h('input', { type: 'checkbox', checked: !!(S.ajustes || {}).verTiempo, onchange: ev => { S.ajustes = S.ajustes || {}; S.ajustes.verTiempo = ev.target.checked; guardar(); render(); } }), 'Mostrar la pestaña Tiempo (calendario del mundo y relojes)'),
     h('div', { class: 'campl', style: { marginTop: '10px' } }, CAMPS.map(c => h('button', { class: 'btn' + (c.id === ACTIVA ? ' pri' : ''), onclick: () => { if (c.id !== ACTIVA) abrirCampana(c.id); } }, c.nombre + (c.abrev ? '  ·  ' + c.abrev : ''))), h('button', { class: 'btn', style: { borderStyle: 'dashed' }, onclick: nuevaCampana }, '+ Nueva campaña')),
     h('h3', {}, 'Copia de seguridad'), h('p', {}, 'Todo vive en este navegador. Hacé una copia seguido y guardala en tu carpeta del proyecto. Frodo y vos van a tener copias separadas hasta que armemos la sincronización: se pasan el archivo.'),
     h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, h('button', { class: 'btn pri', onclick: () => download(`${S.campana.abrev || 'campana'}-copia-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(S), 'application/json') }, 'Descargar copia (.json)'),
@@ -5766,8 +5787,9 @@ function vAjustes(root) {
     h('p', {}, 'Relieve del mapa: «Fantasy Map Assets Pack Lite» de Amanz, licencia CC BY 4.0 (amanz.itch.io/fantasy-map-assets-pack-lite). Tipografías Cinzel, EB Garamond y Marcellus, licencia SIL Open Font. Marca de Růnica: manual de marca propio.'),
     h('h3', {}, 'Zona de riesgo'), CAMPS.length > 1 && !NUBE.on ? h('button', { class: 'btn peligro', style: { marginRight: '8px' }, onclick: () => modal('Eliminar campaña', h('p', {}, 'Se borra «' + S.campana.nombre + '» de este navegador, con todas sus fichas, mapa y transcripciones. Las otras campañas no se tocan. Hacé una copia antes.'), [{ txt: 'Cancelar' }, { txt: 'Eliminar', pri: true, fn: async () => { const id = ACTIVA, sig = CAMPS.find(c => c.id !== id); CAMPS = CAMPS.filter(c => c.id !== id); await DB.set('estado:' + id, null); await abrirCampana(sig.id); } }]) }, 'Eliminar esta campaña') : null, h('button', { class: 'btn peligro', onclick: () => modal('Volver a los datos iniciales', h('p', {}, 'Se borran tus fichas, el mapa y las transcripciones guardadas en este navegador y se vuelve al contenido de arranque. Hacé una copia antes.'), [{ txt: 'Cancelar' }, { txt: 'Borrar todo', pri: true, fn: async () => { S = ACTIVA === 'l7r' ? estadoInicial() : estadoVacio(S.campana.nombre, S.campana.abrev); invalidarIdx(); await Atlas.init(); guardar(); Nav.ent = null; render(); } }]) }, 'Empezar de cero'),
     h('p', { class: 'empty', style: { marginTop: '24px' } }, 'Růnica v' + VERSION));
-  if (NUBE.on) w.append(bloqueAvisos());
+  if (NUBE.on) w.append(h('h3', {}, 'Avisos en este dispositivo'), bloqueAvisos());
   if (NUBE.on) ajustesNube(w);
+  agruparAjustes(w);
   root.append(h('div', { class: 'col', style: { height: '100%' } }, w));
 }
 
