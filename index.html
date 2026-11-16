@@ -424,6 +424,17 @@ details.ed-mas>summary{font-size:13px}
 @media (prefers-reduced-motion:no-preference){.instalar{animation:instsube .35s ease-out}}
 @keyframes instsube{from{opacity:0;transform:translate(-50%,16px)}to{opacity:1;transform:translateX(-50%)}}
 
+.prox{display:block;padding:14px 16px;margin:0 0 12px;border-color:var(--linea2)}
+.prox p{margin:0 0 10px;color:var(--txt2)}
+.prox .lab{margin-bottom:4px}
+.prox h3{margin:2px 0 6px}
+.prox.hoy{border-color:var(--latón);box-shadow:0 0 0 1px var(--latón) inset}
+.prox.hoy .lab{color:var(--latón2)}
+@media (prefers-reduced-motion:no-preference){.prox.hoy{animation:hoybrilla 3.2s ease-in-out infinite}}
+@keyframes hoybrilla{50%{box-shadow:0 0 0 1px var(--latón) inset,0 0 18px rgba(212,175,55,.28)}}
+.chk{display:flex;align-items:center;gap:8px;margin:6px 0;color:var(--txt2);cursor:pointer}
+.avisos{margin-top:6px}
+
 </style>
 </head>
 <body>
@@ -559,7 +570,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.8.3';
+const VERSION = '0.9.0';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -4318,7 +4329,7 @@ async function abrirNube(cid) {
   } catch (e) { pantallaMensaje('No pude abrir la campaña (' + (e.code || e.message) + ').'); return; }
   invalidarIdx(); await arrancar();
   if (NUBE.rol === 'dm') Promise.all([cargarPreguntas(), cargarComentarios()]).then(actualizarBadge);
-  NUBE.unsub2?.(); NUBE.unsub2 = escucharHandouts();
+  NUBE.unsub2?.(); NUBE.unsub2 = escucharHandouts(); NUBE.unsub3?.(); NUBE.unsub3 = escucharProxima();
   NUBE.unsub = escuchar(NUBE.rol === 'dm' ? 'dm' : 'jug');
 }
 function escuchar(k) {
@@ -4974,7 +4985,7 @@ function editarHandout(x) {
 }
 async function mostrarATodos(x) {
   x.mostrado = true; x.t = Date.now(); guardar();
-  if (NUBE.on && NUBE.rol === 'dm') { try { await FB.setDoc(FB.doc('campanas', NUBE.cid, 'jug', 'handout'), { id: x.id, titulo: x.titulo, img: x.img, texto: x.texto, t: x.t }); toast('Los jugadores lo están viendo'); } catch (e) { toast('No se pudo mostrar: ' + (e.code || e.message)); } }
+  if (NUBE.on && NUBE.rol === 'dm') { try { await FB.setDoc(FB.doc('campanas', NUBE.cid, 'jug', 'handout'), { id: x.id, titulo: x.titulo, img: x.img, texto: x.texto, t: x.t }); toast('Los jugadores lo están viendo'); enviarPush('handout', 'El DM te muestra: ' + (x.titulo || 'un handout'), ''); } catch (e) { toast('No se pudo mostrar: ' + (e.code || e.message)); } }
   else mostrarHandout(x);
   render();
 }
@@ -5016,7 +5027,7 @@ function bloqueComentarios(e) {
   if (!NUBE.on || !NUBE.cid) return null; const caja = h('div', { class: 'bloque coment' }, h('div', { class: 'lab' }, 'Teorías y comentarios'));
   const lista = h('div'), inp = h('textarea', { rows: 2, placeholder: '¿Qué sospechás? ¿Qué no te cierra?' });
   const pintar = cs => { lista.innerHTML = ''; cs.sort((a, b) => a.t - b.t).forEach(c => lista.append(h('div', { class: 'com' }, h('div', { class: 'quien' }, c.quien + ' · ' + fechaCorta(c.t)), h('div', { html: sinP(rich(c.txt)) }), c.resp ? h('div', { class: 'resp' }, h('b', {}, 'DM: '), c.resp) : null,
-    h('div', { class: 'cacc' }, NUBE.rol === 'dm' ? h('button', { class: 'btn sm', onclick: () => preguntar('Responder', c.quien + ' dijo: ' + c.txt.slice(0, 80), c.resp || '', async r => { await FB.setDoc(FB.doc('campanas', NUBE.cid, 'coment', c.id), { resp: r }, { merge: true }); c.resp = r; pintar(cs); _coment = null; }) }, c.resp ? 'Editar respuesta' : 'Responder') : null,
+    h('div', { class: 'cacc' }, NUBE.rol === 'dm' ? h('button', { class: 'btn sm', onclick: () => preguntar('Responder', c.quien + ' dijo: ' + c.txt.slice(0, 80), c.resp || '', async r => { await FB.setDoc(FB.doc('campanas', NUBE.cid, 'coment', c.id), { resp: r }, { merge: true }); c.resp = r; if (r && c.mail) enviarPush('resp', 'El DM respondió a tu teoría', r.slice(0, 140), c.mail); pintar(cs); _coment = null; }) }, c.resp ? 'Editar respuesta' : 'Responder') : null,
       NUBE.rol === 'dm' ? h('button', { class: 'btn sm', onclick: () => { anotarHist(e, 'Teoría a notas'); e.secreto = (e.secreto ? e.secreto.trim() + '\n\n' : '') + 'Teoría de ' + c.quien + ': ' + c.txt; guardar(); toast('Copiado a tus notas de DM'); } }, 'A mis notas') : null,
       NUBE.rol === 'dm' || c.mail === NUBE.user.email ? h('button', { class: 'btn sm peligro', onclick: async () => { await FB.deleteDoc(FB.doc('campanas', NUBE.cid, 'coment', c.id)); pintar(cs.filter(x => x !== c)); _coment = null; } }, 'Borrar') : null)))); };
   FB.getDocs(FB.query(FB.col('campanas', NUBE.cid, 'coment'), FB.where('ent', '==', e.id))).then(r => pintar(r.docs.map(d => ({ id: d.id, ...d.data() })))).catch(() => lista.append(h('p', { class: 'empty' }, 'No se pudieron cargar.')));
@@ -5046,6 +5057,92 @@ function vPreparar(root) {
 /* 15. Grafo: color por facción */
 const PAL_F = ['#d4af37', '#d0724a', '#8db6d3', '#8aa874', '#c59ad9', '#e0a0a0', '#9fd0c8', '#c9b27a'];
 function colorFaccion(e) { const f = campoAgr(e, 'faccion'); if (f === 'Sin facción') return '#6b6b6b'; const fs = [...new Set(S.ents.filter(x => x.tipo === 'faccion').map(x => x.nombre))]; return PAL_F[fs.indexOf(f) % PAL_F.length] || '#aaa'; }
+
+/* ===== AVISOS PUSH + PRÓXIMA SESIÓN =====
+   Los jugadores activan avisos en Ajustes (se guarda su suscripción en campanas/{id}/push). El DM dispara los avisos desde su app
+   y el Worker de Cloudflare (nube/worker) los entrega. Todo gratis. En iPhone solo anda con la app instalada (iOS 16.4+). */
+const PUSH = { url: 'https://runica-push.tomas-garro-95.workers.dev/', pub: 'BMwRE0622fg-xMHGZ3ZWzfhMzM0VMkKB-3uHuG70Jg-rDifLfwh1jCYrLdptJTa4DFDR3e9ayvqi_Ssb5TXhMSQ' };
+const PUSH_EVS = [['proxima', 'Próxima sesión'], ['handout', 'Handouts que muestra el DM'], ['resp', 'Respuestas del DM a mis teorías']];
+const pushOk = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const _b64 = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+const _prefK = () => 'runica.avisos.' + NUBE.cid;
+function pushPrefs() { try { return { proxima: true, handout: true, resp: true, ...JSON.parse(localStorage.getItem(_prefK()) || '{}') }; } catch (_) { return { proxima: true, handout: true, resp: true }; } }
+async function _idSub(sub) { const b = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(sub.endpoint)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('').slice(0, 20); }
+async function pushGuardar(sub) { await FB.setDoc(FB.doc('campanas', NUBE.cid, 'push', await _idSub(sub)), { mail: NUBE.user.email, sub: JSON.stringify(sub), ev: pushPrefs(), t: Date.now() }); }
+async function pushActivar() {
+  if (await Notification.requestPermission() !== 'granted') { toast('Los avisos están bloqueados: habilitalos en los ajustes del navegador o del teléfono'); return false; }
+  const reg = await navigator.serviceWorker.ready; let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: _b64(PUSH.pub) });
+  await pushGuardar(sub.toJSON()); return true;
+}
+async function pushDesactivar() { const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); if (!sub) return; const j = sub.toJSON(); try { await FB.deleteDoc(FB.doc('campanas', NUBE.cid, 'push', await _idSub(j))); } catch (_) { } await sub.unsubscribe(); }
+function bloqueAvisos() {
+  const w = h('div', { class: 'avisos' }), caja = h('div');
+  w.append(h('h3', {}, 'Avisos en este dispositivo'), caja);
+  const pintar = async () => {
+    caja.innerHTML = '';
+    if (!pushOk()) { caja.append(h('p', {}, /iphone|ipad|ipod/i.test(navigator.userAgent) ? 'En iPhone primero instalá la app: Compartir → «Agregar a pantalla de inicio», y abrila desde el ícono.' : 'Este navegador no soporta avisos.')); return; }
+    const reg = await navigator.serviceWorker.ready.catch(() => null), sub = reg && await reg.pushManager.getSubscription(), on = !!sub && Notification.permission === 'granted';
+    caja.append(h('p', {}, on ? 'Activados: te llegan aunque la app esté cerrada.' : 'Activalos para enterarte de la próxima sesión y de lo que el DM te muestra.'),
+      h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+        h('button', { class: 'btn' + (on ? '' : ' pri'), onclick: async e => { e.target.disabled = true; try { if (on) await pushDesactivar(); else await pushActivar(); } catch (err) { toast('No se pudo: ' + (err.code || err.message)); } pintar(); } }, on ? 'Desactivar' : 'Activar avisos'),
+        on ? h('button', { class: 'btn', onclick: () => reg.showNotification('Růnica', { body: 'Así te van a llegar los avisos.', icon: 'icon-192.png', tag: 'prueba' }) }, 'Probar') : null));
+    if (on) { const pr = pushPrefs(); caja.append(h('div', { class: 'lab f', style: { marginTop: '10px' } }, 'Avisarme de'), PUSH_EVS.map(([k, n]) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: pr[k] !== false, onchange: async e => { pr[k] = e.target.checked; try { localStorage.setItem(_prefK(), JSON.stringify(pr)); } catch (_) { } try { await pushGuardar(sub.toJSON()); } catch (_) { } } }), ' ' + n))); }
+  };
+  pintar(); return w;
+}
+async function enviarPush(evento, titulo, cuerpo, para) {
+  if (!NUBE.on || NUBE.rol !== 'dm') return null;
+  try {
+    const tok = await FB.auth.currentUser.getIdToken(), r = await fetch(PUSH.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ cid: NUBE.cid, evento, titulo, cuerpo, para }) }), j = await r.json();
+    if (!r.ok) { toast('No se pudo avisar: ' + (j.error || r.status)); return j; }
+    toast(j.enviados ? 'Aviso enviado a ' + j.enviados + (j.enviados === 1 ? ' dispositivo' : ' dispositivos') : 'Nadie tiene los avisos activados todavía'); return j;
+  } catch (e) { toast('No se pudo avisar (¿sin internet?)'); return null; }
+}
+
+/* ---- Próxima sesión ---- */
+const proximaSesion = () => (NUBE.on && NUBE.rol === 'jug') ? NUBE.proxima : S.proxima;
+function numProxima() { const nMax = Math.max(0, ...S.sesiones.map(s => s.n)), u = S.sesiones.find(s => s.n === Math.max(S.ses, nMax)); return Math.max(S.ses, nMax) + (u?.resumen ? 1 : 0); }
+const _fechaLarga = t => { const d = new Date(t), f = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).format(d), hs = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }); return f.charAt(0).toUpperCase() + f.slice(1) + ' · ' + hs + ' hs'; };
+function urlCalendario(p, invitados) {
+  const f = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d+/, ''), a = new Date(p.t), z = new Date(+a + (p.dur || 4) * 36e5);
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent((S.campana.abrev || S.campana.nombre) + ' · Sesión ' + p.n) + '&dates=' + f(a) + '/' + f(z)
+    + '&details=' + encodeURIComponent(p.nota || 'Sesión de ' + S.campana.nombre) + '&location=' + encodeURIComponent(p.lugar || '') + (invitados?.length ? '&add=' + encodeURIComponent(invitados.join(',')) : '');
+}
+function invitados() { const c = NUBE.camps?.find(x => x.id === NUBE.cid); return (c?.miembros || []).filter(m => m !== NUBE.user?.email); }
+function escucharProxima() {
+  if (!NUBE.on || NUBE.rol !== 'jug') return null;
+  return FB.onSnapshot(FB.doc('campanas', NUBE.cid, 'jug', 'proxima'), s => { const n = s.exists() ? s.data() : null; if (JSON.stringify(n) !== JSON.stringify(NUBE.proxima)) { NUBE.proxima = n; try { render(); } catch (_) { } } });
+}
+async function guardarProxima(p) {
+  S.proxima = p; guardar();
+  if (NUBE.on && NUBE.rol === 'dm') { try { if (p) await FB.setDoc(FB.doc('campanas', NUBE.cid, 'jug', 'proxima'), p); else await FB.deleteDoc(FB.doc('campanas', NUBE.cid, 'jug', 'proxima')); } catch (e) { toast('No se pudo publicar la fecha: ' + (e.code || e.message)); } }
+}
+function editarProxima() {
+  const p = S.proxima || {}, dt = p.t ? new Date(new Date(p.t) - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : '';
+  const t = h('input', { type: 'datetime-local', value: dt }), dur = h('input', { type: 'number', min: 1, max: 12, step: .5, value: p.dur || 4 }), lugar = h('input', { type: 'text', value: p.lugar || '', placeholder: 'Ej.: Casa de Frodo / Discord' }), nota = h('textarea', { rows: 2, value: p.nota || '', placeholder: 'Qué llevar, a quién esperamos…' });
+  const av = h('input', { type: 'checkbox', checked: NUBE.on }), cal = h('input', { type: 'checkbox', checked: NUBE.on });
+  modal('Próxima sesión', h('div', { class: 'form' }, campoF('Día y hora', t), campoF('Duración (horas)', dur), campoF('Lugar', lugar), campoF('Nota', nota),
+    NUBE.on ? h('label', { class: 'chk' }, av, ' Avisar por notificación a los jugadores') : null,
+    NUBE.on ? h('label', { class: 'chk' }, cal, ' Mandar invitación de Google Calendar a los jugadores') : null,
+    NUBE.on ? h('p', { class: 'nota-p' }, 'Se abre Google Calendar con todos cargados como invitados: tocás Guardar y Google les manda la invitación.') : null),
+    [{ txt: 'Cancelar' }, { txt: 'Guardar', pri: true, fn: () => {
+      if (!t.value) { toast('Elegí día y hora'); return false; }
+      const q = { n: numProxima(), t: new Date(t.value).toISOString(), dur: +dur.value || 4, lugar: lugar.value.trim(), nota: nota.value.trim(), upd: Date.now() };
+      if (NUBE.on && cal.checked && !window.open(urlCalendario(q, invitados()), '_blank')) toast('Tu navegador bloqueó Google Calendar: usá «Invitar por Google Calendar»');
+      guardarProxima(q).then(() => { if (NUBE.on && av.checked) enviarPush('proxima', 'Próxima sesión · ' + _fechaLarga(q.t), q.lugar || q.nota || 'Nos vemos en la mesa'); }); render();
+    } }]);
+}
+function bloqueProxima() {
+  const p = proximaSesion(), dm = esDM(); if (!p?.t) return dm ? h('div', { class: 'card prox' }, h('div', { class: 'lab' }, 'Próxima sesión'), h('button', { class: 'btn pri', onclick: editarProxima }, 'Programar')) : null;
+  const falta = new Date(p.t) - Date.now(); if (falta < -(p.dur || 4) * 36e5 && !dm) return null;
+  const hoy = falta > 0 && falta < 864e5;      // 🥚 Aliento Blanco: el día de la mesa, la tarjeta cambia de voz y brilla
+  return h('div', { class: 'card prox' + (hoy ? ' hoy' : '') }, h('div', { class: 'lab' }, hoy ? 'Hoy el Aliento Blanco llama a la mesa' : 'Próxima sesión · ' + p.n), h('h3', {}, _fechaLarga(p.t)),
+    p.lugar || p.nota ? h('p', {}, [p.lugar, p.nota].filter(Boolean).join(' · ')) : null,
+    h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, h('a', { class: 'btn', href: urlCalendario(p, null), target: '_blank', rel: 'noopener' }, 'Agregar a mi calendario'),
+      dm ? [h('button', { class: 'btn', onclick: editarProxima }, 'Cambiar'), NUBE.on ? h('a', { class: 'btn', href: urlCalendario(p, invitados()), target: '_blank', rel: 'noopener' }, 'Invitar por Google Calendar') : null,
+        h('button', { class: 'btn peligro', onclick: () => modal('Cancelar la sesión', h('p', {}, 'Se borra la fecha para todos y se avisa a los jugadores.'), [{ txt: 'Volver' }, { txt: 'Cancelar sesión', pri: true, fn: () => { guardarProxima(null).then(() => enviarPush('proxima', 'Sesión cancelada', 'El DM canceló la próxima sesión.')); render(); } }]) }, 'Cancelar')] : null));
+}
 
 /* ===== navegación y vistas ===== */
 const Nav = {
@@ -5613,6 +5710,7 @@ function vGrafo(root) {
 /* ---------- Sesiones ---------- */
 function vSesiones(root) {
   const dm = esDM(); const wrap = h('div', { class: 'ses' });
+  { const bp = bloqueProxima(); if (bp) wrap.append(bp); }
   { const bn = bloqueNotas(); if (bn) wrap.append(bn); }
   { const ult = S.sesiones.filter(x => x.n <= S.ses).sort((a, b) => b.n - a.n)[0]; wrap.append(h('div', { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' } }, ult ? h('button', { class: 'btn pri', onclick: () => recap(ult) }, 'Previously on…') : null, dm ? h('button', { class: 'btn', onclick: () => editarSesion() }, '+ Sesión') : null)); }
   for (const s of S.sesiones.filter(x => dm || x.n <= S.ses)) {
@@ -5668,6 +5766,7 @@ function vAjustes(root) {
     h('p', {}, 'Relieve del mapa: «Fantasy Map Assets Pack Lite» de Amanz, licencia CC BY 4.0 (amanz.itch.io/fantasy-map-assets-pack-lite). Tipografías Cinzel, EB Garamond y Marcellus, licencia SIL Open Font. Marca de Růnica: manual de marca propio.'),
     h('h3', {}, 'Zona de riesgo'), CAMPS.length > 1 && !NUBE.on ? h('button', { class: 'btn peligro', style: { marginRight: '8px' }, onclick: () => modal('Eliminar campaña', h('p', {}, 'Se borra «' + S.campana.nombre + '» de este navegador, con todas sus fichas, mapa y transcripciones. Las otras campañas no se tocan. Hacé una copia antes.'), [{ txt: 'Cancelar' }, { txt: 'Eliminar', pri: true, fn: async () => { const id = ACTIVA, sig = CAMPS.find(c => c.id !== id); CAMPS = CAMPS.filter(c => c.id !== id); await DB.set('estado:' + id, null); await abrirCampana(sig.id); } }]) }, 'Eliminar esta campaña') : null, h('button', { class: 'btn peligro', onclick: () => modal('Volver a los datos iniciales', h('p', {}, 'Se borran tus fichas, el mapa y las transcripciones guardadas en este navegador y se vuelve al contenido de arranque. Hacé una copia antes.'), [{ txt: 'Cancelar' }, { txt: 'Borrar todo', pri: true, fn: async () => { S = ACTIVA === 'l7r' ? estadoInicial() : estadoVacio(S.campana.nombre, S.campana.abrev); invalidarIdx(); await Atlas.init(); guardar(); Nav.ent = null; render(); } }]) }, 'Empezar de cero'),
     h('p', { class: 'empty', style: { marginTop: '24px' } }, 'Růnica v' + VERSION));
+  if (NUBE.on) w.append(bloqueAvisos());
   if (NUBE.on) ajustesNube(w);
   root.append(h('div', { class: 'col', style: { height: '100%' } }, w));
 }
