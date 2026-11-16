@@ -570,7 +570,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.9.1';
+const VERSION = '0.9.2';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -5086,7 +5086,7 @@ function bloqueAvisos() {
     caja.append(h('p', {}, on ? 'Activados: te llegan aunque la app esté cerrada.' : 'Activalos para enterarte de la próxima sesión y de lo que el DM te muestra.'),
       h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
         h('button', { class: 'btn' + (on ? '' : ' pri'), onclick: async e => { e.target.disabled = true; try { if (on) await pushDesactivar(); else await pushActivar(); } catch (err) { toast('No se pudo: ' + (err.code || err.message)); } pintar(); } }, on ? 'Desactivar' : 'Activar avisos'),
-        on ? h('button', { class: 'btn', onclick: () => reg.showNotification('Růnica', { body: 'Así te van a llegar los avisos.', icon: 'icon-192.png', tag: 'prueba' }) }, 'Probar') : null));
+        on ? h('button', { class: 'btn', onclick: () => reg.showNotification('Růnica', { body: 'Así te van a llegar los avisos.', icon: 'icon-192.png', badge: 'badge-96.png', tag: 'prueba' }) }, 'Probar') : null));
     if (on) { const pr = pushPrefs(); caja.append(h('div', { class: 'lab f', style: { marginTop: '10px' } }, 'Avisarme de'), PUSH_EVS.map(([k, n]) => h('label', { class: 'chk' }, h('input', { type: 'checkbox', checked: pr[k] !== false, onchange: async e => { pr[k] = e.target.checked; try { localStorage.setItem(_prefK(), JSON.stringify(pr)); } catch (_) { } try { await pushGuardar(sub.toJSON()); } catch (_) { } } }), ' ' + n))); }
   };
   pintar(); return w;
