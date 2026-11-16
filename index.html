@@ -445,6 +445,18 @@ details.ed-mas>summary{font-size:13px}
 @media (prefers-reduced-motion:reduce){.ajus details.aj>summary::after{transition:none}}
 .ajus label.sw{display:flex;gap:8px;align-items:flex-start;margin:10px 0}.ajus label.sw input{margin-top:5px}
 
+.capasd{margin:0 0 14px;border:1px solid var(--linea);border-radius:8px;background:var(--panel)}
+.capasd>summary{padding:10px 12px;cursor:pointer;font-family:var(--f-label);letter-spacing:.05em;color:var(--latón2)}
+.capa{display:flex;align-items:center;gap:4px;padding:2px 8px;border-top:1px solid var(--linea)}
+.capa .cn{flex:1;padding:10px 4px;color:var(--txt2);cursor:pointer}
+.capa.on .cn{color:var(--txt)}.capa.off .cn{color:var(--mut);text-decoration:line-through}
+.capa .cb,.capa .cr{min-width:36px;min-height:36px;display:grid;place-items:center;background:none;border:0;color:var(--mut);cursor:pointer;border-radius:6px}
+.capa .cb:hover:not(:disabled){color:var(--txt);background:var(--panel2)}.capa .cb.act{color:var(--latón)}.capa .cb:disabled{opacity:.25;cursor:default}
+.capa .cr span{width:14px;height:14px;border-radius:50%;border:2px solid var(--mut)}
+.capa.on .cr span{border-color:var(--latón);background:radial-gradient(var(--latón) 45%,transparent 50%)}
+.capasd .tgl{padding:8px 12px;display:flex;gap:8px;align-items:center;border-top:1px solid var(--linea)}
+.capa .cb,.capa .cr{min-width:30px}.capa .cn{white-space:nowrap;font-size:15px}.capasd>summary{font-size:14px}
+
 </style>
 </head>
 <body>
@@ -580,7 +592,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.9.3';
+const VERSION = '0.10.0';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -742,6 +754,7 @@ const ICON = {
 const svg = (n) => `<svg viewBox="0 0 24 24"><path d="${ICON[n]}"/></svg>`;
 
 const INK = { tinta: '#34261a', bosque: '#3c5230', sepia: '#6b4a2b', rojo: '#7a2a22', hielo: '#4f7690', blanco: '#ece5d2', negro: '#14100c' };
+const CAPAS_N = { tierra: 'Tierra y mar', rutas: 'Caminos y ríos', relieve: 'Relieve', viaje: 'Viaje', niebla: 'Niebla', pines: 'Lugares', etiquetas: 'Textos' };
 const SPR = {};      // id -> {img,w,h,cat,name}
 const _tint = new Map();
 let _noise = null;
@@ -796,8 +809,8 @@ const ESTILOS = {
 const Atlas = {
   W: 2400, H: 1500, TW: 1600, TH: 1000, LW: 1200, LH: 750,
   view: { x: 0, y: 0, k: .5 }, tool: 'sel', sel: null, drag: null, tmp: null, dirty: true, hist: [], hi: -1,
-  capas: { relieve: true, rutas: true, pines: true, etiquetas: true, niebla: true },
-  opt: { spr: 'mount1', col: 'tinta', ancho: 150, disp: false, dens: 5, rad: 90, pincel: 60, rutaTipo: 'viaje', nieblaR: 200, icono: 'town_village', soloTierra: true },
+  capas: { tierra: true, rutas: true, relieve: true, viaje: true, niebla: true, pines: true, etiquetas: true }, atenuar: false,
+  opt: { spr: 'mount_mount1', col: 'tinta', ancho: 150, disp: false, dens: 5, rad: 90, pincel: 60, rutaTipo: 'viaje', nieblaR: 200, icono: 'town_village', soloTierra: true },
   terrain: null, landC: null, landData: null, terrDirty: true, montado: false, fuentes: false,
 
   /* ---- datos ---- */
@@ -907,26 +920,26 @@ const Atlas = {
     const exportar = !!cx; const cw = exportar ? this.W : this.cv.width, ch = exportar ? this.H : this.cv.height;
     c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = '#0c0a08'; c.fillRect(0, 0, cw, ch);
     c.save(); if (!exportar) c.setTransform(this.view.k * this.dpr, 0, 0, this.view.k * this.dpr, this.view.x * this.dpr, this.view.y * this.dpr);
-    c.imageSmoothingQuality = 'high'; if (this._plano && SOLO_LECTURA) c.drawImage(this._plano, 0, 0, this.W, this.H); else if (this.terrain) c.drawImage(this.terrain, 0, 0, this.W, this.H);
+    c.imageSmoothingQuality = 'high'; if (this._plano && SOLO_LECTURA) c.drawImage(this._plano, 0, 0, this.W, this.H); else if (this.terrain && this.capas.tierra) c.drawImage(this.terrain, 0, 0, this.W, this.H);
     const grupoVe = (r) => esDM() || (S.modo === 'dm' && SOLO_LECTURA) || (r.sesion || 1) <= S.ses;
     const dmv = esDM();
     // tinte provisorio mientras se pinta
     if (this.tmp?.land && !exportar) { c.globalAlpha = .45; c.drawImage(this.landC, 0, 0, this.W, this.H); c.globalAlpha = 1; }
-    // rutas de fondo
-    if (this.capas.rutas) for (const r of m.rutas) if (r.tipo !== 'viaje' && grupoVe(r)) this.trazo(c, r, false);
-    // estampas
-    if (this.capas.relieve) for (const s of [...m.estampas].sort((a, b) => a.y - b.y)) {
-      const sp = SPR[s.s]; if (!sp) continue; const w = s.w, hh = w * sp.h / sp.w; c.save(); c.translate(s.x, s.y);
-      if (s.flip) c.scale(-1, 1); c.drawImage(tinted(s.s, INK[s.col] || s.col), -w / 2, -hh, w, hh); c.restore();
-    }
-    // viaje
-    if (this.capas.rutas) for (const r of m.rutas) if (r.tipo === 'viaje' && grupoVe(r)) this.trazo(c, r, true);
-    // niebla
-    if (this.hayNiebla()) this.dibujarNiebla(c, dmv);
-    // pines
-    if (this.capas.pines) for (const p of m.pines) if (this.visiblePin(p)) this.dibujarPin(c, p, dmv);
-    // etiquetas
-    if (this.capas.etiquetas) for (const t of m.etiquetas) this.dibujarEtiqueta(c, t);
+    // capas en el orden elegido (de abajo hacia arriba); con "atenuar", las que no se editan se ven tenues
+    const atm = !exportar && dmv && this.atenuar && this.capaActiva();
+    const pint = {
+      rutas: () => { for (const r of m.rutas) if (r.tipo !== 'viaje' && grupoVe(r)) this.trazo(c, r, false); },
+      relieve: () => { for (const s of [...m.estampas].sort((a, b) => a.y - b.y)) {
+        const sp = SPR[s.s]; if (!sp) continue; const w = s.w, hh = w * sp.h / sp.w; c.save(); c.translate(s.x, s.y);
+        if (s.flip) c.scale(-1, 1); c.drawImage(tinted(s.s, INK[s.col] || s.col), -w / 2, -hh, w, hh); c.restore();
+      } },
+      viaje: () => { for (const r of m.rutas) if (r.tipo === 'viaje' && grupoVe(r)) this.trazo(c, r, true); },
+      niebla: () => { if (this.hayNiebla()) this.dibujarNiebla(c, dmv); },
+      pines: () => { for (const p of m.pines) if (this.visiblePin(p)) this.dibujarPin(c, p, dmv); },
+      etiquetas: () => { for (const t of m.etiquetas) this.dibujarEtiqueta(c, t); }
+    };
+    for (const k of this.orden()) { if (!this.capas[k]) continue; c.globalAlpha = atm && k !== atm ? .3 : 1; pint[k](); }
+    c.globalAlpha = 1;
     // selección y herramientas
     if (!exportar) this.dibujarUI(c);
     c.restore();
@@ -990,11 +1003,11 @@ const Atlas = {
   /* ---- interacción ---- */
   hit(wx, wy) {
     const m = S.mapa, k = this.view.k, dm = esDM(), sl = this.slop || 1;
-    if (this.capas.pines) for (const p of [...m.pines].reverse()) { if (!this.visiblePin(p)) continue; const w = p.w || 60; if (Math.abs(wx - p.x) < w * .55 * sl && wy < p.y + 26 * sl && wy > p.y - w * .9 * sl) return { tipo: 'pin', id: p.id }; }
-    if (dm && this.capas.etiquetas) for (const t of [...m.etiquetas].reverse()) { if (Math.abs(wx - t.x) < t.txt.length * t.sz * .3 && Math.abs(wy - t.y) < t.sz * .7) return { tipo: 'etiqueta', id: t.id }; }
-    if (dm && this.tool === 'niebla') for (const d of m.niebla) if ((wx - d.x) ** 2 + (wy - d.y) ** 2 < (14 * sl / k) ** 2) return { tipo: 'niebla', id: d.id };
-    if (this.capas.rutas) for (const r of [...m.rutas].reverse()) { if (!dm && (r.sesion || 1) > S.ses) continue; for (let i = 1; i < r.pts.length; i++) if (distSeg(wx, wy, r.pts[i - 1], r.pts[i]) < 10 * sl / k) return { tipo: 'ruta', id: r.id }; }
-    if (dm && this.capas.relieve) for (const s of [...m.estampas].sort((a, b) => b.y - a.y)) { const sp = SPR[s.s], hh = s.w * sp.h / sp.w; if (Math.abs(wx - s.x) < s.w / 2 && wy < s.y && wy > s.y - hh) return { tipo: 'estampa', id: s.id }; }
+    if (this.capas.pines && !this.bloq('pines')) for (const p of [...m.pines].reverse()) { if (!this.visiblePin(p)) continue; const w = p.w || 60; if (Math.abs(wx - p.x) < w * .55 * sl && wy < p.y + 26 * sl && wy > p.y - w * .9 * sl) return { tipo: 'pin', id: p.id }; }
+    if (dm && this.capas.etiquetas && !this.bloq('etiquetas')) for (const t of [...m.etiquetas].reverse()) { if (Math.abs(wx - t.x) < t.txt.length * t.sz * .3 && Math.abs(wy - t.y) < t.sz * .7) return { tipo: 'etiqueta', id: t.id }; }
+    if (dm && this.tool === 'niebla' && !this.bloq('niebla')) for (const d of m.niebla) if ((wx - d.x) ** 2 + (wy - d.y) ** 2 < (14 * sl / k) ** 2) return { tipo: 'niebla', id: d.id };
+    for (const r of [...m.rutas].reverse()) { const ck = r.tipo === 'viaje' ? 'viaje' : 'rutas'; if (!this.capas[ck] || this.bloq(ck)) continue; if (!dm && (r.sesion || 1) > S.ses) continue; for (let i = 1; i < r.pts.length; i++) if (distSeg(wx, wy, r.pts[i - 1], r.pts[i]) < 10 * sl / k) return { tipo: 'ruta', id: r.id }; }
+    if (dm && this.capas.relieve && !this.bloq('relieve')) for (const s of [...m.estampas].sort((a, b) => b.y - a.y)) { const sp = SPR[s.s], hh = s.w * sp.h / sp.w; if (Math.abs(wx - s.x) < s.w / 2 && wy < s.y && wy > s.y - hh) return { tipo: 'estampa', id: s.id }; }
     return null;
   },
   pintar(wx, wy, borrar) {
@@ -1032,6 +1045,7 @@ const Atlas = {
       this.toque = { x: e.clientX, y: e.clientY, t: performance.now(), tipo: e.pointerType };
       const [sx, sy] = pos(e), [wx, wy] = this.s2w(sx, sy), dm = esDM(), t = this.tool;
       this.mouse = [wx, wy];
+      { const cp = this.capaDeTool(t); if (dm && cp && (this.bloq(cp) || !this.capas[cp])) { toast('La capa «' + CAPAS_N[cp] + '» está ' + (this.bloq(cp) ? 'bloqueada' : 'oculta') + ': activala en el panel Capas'); this.toque = null; return; } }
       if (!dm || t === 'sel' || e.button === 1 || e.shiftKey && t === 'sel') {
         const h = this.hit(wx, wy);
         if (h && e.button !== 1) {
@@ -1144,7 +1158,8 @@ const Atlas = {
     if (S.mapa.borrador && esDM()) t.append(h('span', { class: 'msg' }, 'Borrador provisorio: las posiciones son inventadas'));
     if (this.tool === 'ruta' && this.tmp?.ruta) t.append(h('span', { class: 'msg' }, 'Doble clic para terminar la ruta'));
   },
-  panel() {
+  panel() { this.panel_(); if (this.pnEl && esDM()) { const c = this.capasUI(); if (this.sel) this.pnEl.append(c); else this.pnEl.prepend(c); } },
+  panel_() {
     if (!this.pnEl) return; const p = this.pnEl, m = S.mapa, dm = esDM(); p.innerHTML = '';
     const sel = this.sel && this.objeto(this.sel);
     const slider = (lab, val, min, max, step, fn) => h('div', {}, h('label', { class: 'lab' }, lab + ' · ' + val), h('input', { type: 'range', min, max, step, value: val, oninput: e => { fn(+e.target.value); e.target.previousSibling.textContent = lab + ' · ' + e.target.value; } , onchange: () => this.confirmar() }));
@@ -1197,12 +1212,44 @@ const Atlas = {
     if (t === 'ruta') { p.append(h('h3', {}, 'Ruta nueva'), h('label', { class: 'lab f' }, 'Tipo'), h('select', { onchange: e => o.rutaTipo = e.target.value }, [['viaje', 'Viaje del grupo'], ['camino', 'Camino'], ['rio', 'Río'], ['frontera', 'Frontera'], ['futuro', 'Ruta posible']].map(([v, n]) => h('option', { value: v, selected: o.rutaTipo === v }, n))), h('p', { class: 'empty' }, 'Un clic por punto, doble clic para terminar.')); return; }
     if (t === 'niebla') { p.append(h('h3', {}, 'Revelar zona'), slider('Radio', o.nieblaR, 60, 700, 10, v => o.nieblaR = v), h('p', { class: 'empty' }, 'Cada círculo queda oculto para el grupo hasta la sesión que indiques. Se crea con la sesión elegida arriba.')); return; }
     if (t === 'pin') { p.append(h('h3', {}, 'Lugar nuevo'), h('div', { class: 'lab' }, 'Ícono'), h('div', { class: 'pal' }, Object.values(SPR).filter(s => s.cat === 'icons' || s.cat === 'buildings').map(s => h('button', { class: o.icono === s.id ? 'on' : '', onclick: () => { o.icono = s.id; this.panel(); } }, h('img', { src: s.src }))))); return; }
-    p.append(h('h3', {}, 'Mapa'), this.capasUI(), this.estiloUI(), this.islaUI(),
+    p.append(h('h3', {}, 'Mapa'), this.estiloUI(), this.islaUI(),
       h('div', { class: 'lab' }, 'Salida'), h('button', { class: 'btn', onclick: () => this.exportarPNG() }, 'Descargar imagen (PNG)'),
       h('p', { class: 'empty' }, 'La imagen respeta el modo (Grupo o DM) y la sesión elegida: sirve de handout.'));
   },
+  /* ---- capas: elegir en cuál se dibuja, ocultar, bloquear y reordenar ---- */
+  orden() { const base = ['rutas', 'relieve', 'viaje', 'niebla', 'pines', 'etiquetas'], o = (S.mapa.orden || []).filter(k => base.includes(k)); for (const k of base) if (!o.includes(k)) o.push(k); return o; },
+  bloq(k) { return esDM() && !!(S.mapa.bloq || {})[k]; },
+  capaDeTool(t) { return { tierra: 'tierra', mar: 'tierra', estampa: 'relieve', pin: 'pines', etiqueta: 'etiquetas', niebla: 'niebla' }[t] || (t === 'ruta' ? (this.opt.rutaTipo === 'viaje' ? 'viaje' : 'rutas') : null); },
+  capaActiva() { return this.capaDeTool(this.tool); },
+  capaDeObjeto(sel) { if (!sel) return null; if (sel.tipo === 'ruta') { const r = this.objeto(sel); return r && r.tipo === 'viaje' ? 'viaje' : 'rutas'; } return { pin: 'pines', etiqueta: 'etiquetas', estampa: 'relieve', niebla: 'niebla' }[sel.tipo] || null; },
+  elegirCapa(k) {
+    const t = { tierra: 'tierra', relieve: 'estampa', pines: 'pin', etiquetas: 'etiqueta', niebla: 'niebla', rutas: 'ruta', viaje: 'ruta' }[k];
+    this.capas[k] = true; if (k === 'viaje') this.opt.rutaTipo = 'viaje'; else if (k === 'rutas' && this.opt.rutaTipo === 'viaje') this.opt.rutaTipo = 'camino';
+    this.tool = t; this.tmp = null; this.sel = null; this.barra(); this.panel(); this.pedirDibujo();
+  },
+  soltarSel(k) { if (this.sel && this.capaDeObjeto(this.sel) === k) this.sel = null; },
+  alternarBloqueo(k) {
+    const m = S.mapa; m.bloq = m.bloq || {}; m.bloq[k] = !m.bloq[k]; if (m.bloq[k]) this.soltarSel(k); guardar(); this.panel(); this.pedirDibujo();
+    if (k === 'niebla' && m.bloq[k]) { toast('La niebla guarda sus secretos'); if (!matchMedia('(prefers-reduced-motion:reduce)').matches) this.cv?.animate([{ filter: 'brightness(.55)' }, { filter: 'none' }], { duration: 900 }); }   // 🥚
+  },
+  moverCapa(k, d) { const o = this.orden(), i = o.indexOf(k), j = i + d; if (j < 0 || j >= o.length) return; [o[i], o[j]] = [o[j], o[i]]; S.mapa.orden = o; guardar(); this.panel(); this.pedirDibujo(); },
   capasUI() {
-    const c = this.capas; return h('div', {}, h('div', { class: 'lab' }, 'Capas'), [['relieve', 'Relieve'], ['rutas', 'Rutas y viaje'], ['pines', 'Lugares'], ['etiquetas', 'Textos'], ['niebla', 'Niebla']].map(([k, n]) => h('label', { class: 'tgl' }, h('input', { type: 'checkbox', checked: c[k], onchange: e => { c[k] = e.target.checked; this.pedirDibujo(); } }), n)));
+    const dm = esDM(), act = this.capaActiva(), c = this.capas, ic = (d, x = '') => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}${x}</svg>`;
+    const OJO = '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>', RAYA = '<path d="M4 4l16 16"/>', CAND = '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', CANDA = '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7-2.6"/>';
+    const orden = this.orden(), lista = [...orden].reverse(); if (dm) lista.push('tierra');
+    const fila = k => {
+      const i = orden.indexOf(k), bq = this.bloq(k);
+      return h('div', { class: 'capa' + (act === k ? ' on' : '') + (c[k] ? '' : ' off') },
+        dm ? h('button', { class: 'cr', title: 'Dibujar en esta capa', 'aria-label': 'Dibujar en ' + CAPAS_N[k], onclick: () => this.elegirCapa(k) }, h('span', {})) : null,
+        h('span', { class: 'cn', onclick: dm ? () => this.elegirCapa(k) : null }, CAPAS_N[k]),
+        h('button', { class: 'cb', title: c[k] ? 'Ocultar' : 'Mostrar', 'aria-label': (c[k] ? 'Ocultar ' : 'Mostrar ') + CAPAS_N[k], onclick: () => { c[k] = !c[k]; if (!c[k]) this.soltarSel(k); this.panel(); this.pedirDibujo(); }, html: ic(OJO, c[k] ? '' : RAYA) }),
+        dm ? h('button', { class: 'cb' + (bq ? ' act' : ''), title: bq ? 'Desbloquear' : 'Bloquear', 'aria-label': (bq ? 'Desbloquear ' : 'Bloquear ') + CAPAS_N[k], onclick: () => this.alternarBloqueo(k), html: ic(bq ? CAND : CANDA) }) : null,
+        dm && k !== 'tierra' ? h('button', { class: 'cb', title: 'Subir', 'aria-label': 'Subir ' + CAPAS_N[k], disabled: i === orden.length - 1, onclick: () => this.moverCapa(k, 1), html: '▲' }) : null,
+        dm && k !== 'tierra' ? h('button', { class: 'cb', title: 'Bajar', 'aria-label': 'Bajar ' + CAPAS_N[k], disabled: i === 0, onclick: () => this.moverCapa(k, -1), html: '▼' }) : null);
+    };
+    const d = h('details', { class: 'capasd', open: this.capasAb !== false }, h('summary', {}, 'Capas' + (dm && act ? ' · dibujando en ' + CAPAS_N[act] : '')), lista.map(fila),
+      dm ? h('label', { class: 'tgl' }, h('input', { type: 'checkbox', checked: this.atenuar, onchange: e => { this.atenuar = e.target.checked; this.pedirDibujo(); } }), 'Atenuar las demás al dibujar') : null);
+    d.addEventListener('toggle', () => { this.capasAb = d.open; }); return d;
   },
   estiloUI() {
     const m = S.mapa;
@@ -5747,7 +5794,7 @@ function estadoParaJugadores() {
   e.trans = e.trans.filter(t => t.compartir); e.notas = []; e.prep = {}; e.tablas = []; e.misiones = (e.misiones || []).filter(m => m.vis !== 'dm'); e.handouts = (e.handouts || []).filter(x => x.mostrado); e.ents.forEach(x => { if (x.plano) x.plano = { ...x.plano, pines: x.plano.pines.filter(p => !p.ent || ids.has(p.ent)) }; }); e.ignoradas = []; e.hist = {}; e.papelera = []; e.revIgn = []; if (e.ajustes) delete e.ajustes.descVinc; e.sesiones = e.sesiones.filter(s => s.n <= ses);
   const m = e.mapa;
   // aplanar el mapa tal como lo ve el grupo (la niebla queda horneada en la imagen)
-  const modo = S.modo; S.modo = 'grupo'; const cap = { ...Atlas.capas }; Atlas.capas.pines = false; Atlas.capas.niebla = true; Atlas.capas.relieve = true; Atlas.capas.rutas = true; Atlas.capas.etiquetas = true;
+  const modo = S.modo; S.modo = 'grupo'; const cap = { ...Atlas.capas }; Atlas.capas = { tierra: true, rutas: true, relieve: true, viaje: true, niebla: true, pines: false, etiquetas: true };
   const c = document.createElement('canvas'); c.width = Atlas.W; c.height = Atlas.H; Atlas.exportando = true; Atlas.dibujar(c.getContext('2d')); Atlas.exportando = false; Atlas.capas = cap; S.modo = modo;
   m.plano = c.toDataURL('image/jpeg', .86); m.estampas = []; m.rutas = []; m.etiquetas = []; m.niebla = []; m.tierra = ''; m.papel = ''; m.oceano = ''; m.borrador = false;
   m.pines = m.pines.filter(p => p.rev <= ses && (!p.ent || ids.has(p.ent)));
