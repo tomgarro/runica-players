@@ -480,6 +480,7 @@ details.ed-mas>summary{font-size:13px}
 @keyframes lacre{0%{transform:none;opacity:1}35%{transform:translateX(calc(var(--d)*3px))}100%{transform:translate(calc(var(--d)*34px),26px) rotate(calc(var(--d)*38deg));opacity:0}}
 @media (prefers-reduced-motion:reduce){.lacre{display:none}}
 .aplicadas{margin-top:10px}.aplicadas summary{cursor:pointer;color:var(--mut);font-size:13.5px}
+.ia-panel{margin-top:10px;padding:10px 12px;border:1px solid var(--linea2);border-radius:6px;background:var(--panel2)}.ia-log .l{font-size:13.5px;color:var(--txt2);padding:2px 0;opacity:.6;animation:iaIn .3s}.ia-log .l:last-child{opacity:1;color:#eae6df}.ia-reloj{font-size:12px;color:var(--mut);margin-top:6px}@keyframes iaIn{from{opacity:0;transform:translateY(3px)}}
 
 </style>
 </head>
@@ -619,7 +620,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.16.1';
+const VERSION = '0.16.2';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -5551,7 +5552,7 @@ function bloqueProxima() {
    Revisar con su evidencia y el DM acepta o rechaza. Todo lo creado por IA nace oculto para los jugadores (vis "dm"). */
 const IA_URL = () => PUSH.url + 'ia';
 
-const SISTEMA_IA = `Sos el archivista de una campaña de Dungeons & Dragons 5e (PHB 2014). Tu trabajo: leer un texto que escribió o dictó el Dungeon Master y proponer cómo actualizar la wiki de la campaña. Escribís en español natural, estilo wiki (tercera persona, claro y breve).
+const SISTEMA_IA = `Sos el archivista de una campaña de Dungeons & Dragons 5e (PHB 2014). Tu trabajo: leer un texto que escribió o dictó el Dungeon Master y proponer cómo actualizar la wiki de la campaña. Escribís en español natural, estilo wiki (tercera persona, claro y breve). Tus notas de razonamiento también van en español.
 
 REGLAS DURAS
 1. Usá SOLO lo que dice el texto. No inventes datos, nombres, relaciones ni lugares. Si algo es dudoso, bajá la confianza o no lo propongas.
@@ -5602,13 +5603,33 @@ function partirTexto(t, max = 160000) {
   if (cur) out.push(cur); return out;
 }
 
-async function llamarIA(sistema, usuario) {
+async function llamarIA(sistema, usuario, alAvance) {
   if (!NUBE.on || NUBE.rol !== 'dm') throw new Error('La IA necesita estar conectado a la nube como DM.');
   const tok = await FB.auth.currentUser.getIdToken();
-  const r = await fetch(IA_URL(), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ cid: NUBE.cid, system: sistema, user: usuario }) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || ('error ' + r.status));
-  return j;
+  const r = await fetch(IA_URL(), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ cid: NUBE.cid, system: sistema, user: usuario, stream: true }) });
+  if (!r.ok || (r.headers.get('content-type') || '').includes('application/json')) { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || ('error ' + r.status)); return j; }   /* Worker viejo: responde de una */
+  const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '', texto = '', modelo = '', err = null;
+  for (;;) {
+    const { done, value } = await rd.read(); if (done) break; buf += dec.decode(value, { stream: true });
+    let i; while ((i = buf.indexOf('\n\n')) >= 0) {
+      const bl = buf.slice(0, i).trim(); buf = buf.slice(i + 2); if (!bl.startsWith('data:')) continue;
+      let ev; try { ev = JSON.parse(bl.slice(5)); } catch (_) { continue; }
+      if (ev.k === 'p') alAvance?.({ pensando: ev.t }); else if (ev.k === 't') { texto += ev.t; alAvance?.({ texto }); } else if (ev.k === 'fin') modelo = ev.modelo; else if (ev.k === 'err') err = ev.t;
+    }
+  }
+  if (!texto) throw new Error(err || 'La IA no devolvió nada');
+  return { texto, modelo };
+}
+/* lo que la IA está haciendo, sacado de su razonamiento y de lo que va escribiendo (no es decorado) */
+function leyendaIA(ev) {
+  if (ev.pensando) { const t = ev.pensando, h2 = [...t.matchAll(/\*\*([^*]{3,80})\*\*/g)].pop(); return '🧠 ' + (h2 ? h2[1].trim() : t.replace(/\s+/g, ' ').trim().slice(0, 110)); }
+  if (ev.texto != null) {
+    const t = ev.texto, n = (t.match(/"tipo"\s*:/g) || []).length, cola = t.slice(Math.max(0, t.lastIndexOf('"tipo"'))), ult = k => { const m = [...cola.matchAll(new RegExp('"' + k + '"\\s*:\\s*"([^"]{2,80})', 'g'))].pop(); return m && m[1]; };
+    const tipo = ult('tipo'), que = ult('nombre') || ult('nombre_nuevo') || ult('relacion') || ult('frase') || ult('texto');
+    if (!n) return '✍️ Armando el resumen de la sesión…';
+    return '✍️ Propuesta ' + n + (tipo ? ' · ' + ({ ficha_nueva: 'ficha nueva', ficha_editar: 'cambio en ficha', vinculo: 'vínculo', evento: 'evento', mapa: 'pin en el mapa', contradiccion: 'choque con la wiki', cita: 'cita' }[tipo] || tipo) : '') + (que ? ': ' + que : '');
+  }
+  return '';
 }
 
 /* extrae el JSON aunque venga con basura alrededor */
@@ -5641,9 +5662,9 @@ function limpiarProps(lst) {
 async function analizarEntrada(en, avance) {
   const partes = partirTexto(en.txt), ctx = contextoIA(), props = []; let resumen = '';
   for (let i = 0; i < partes.length; i++) {
-    avance?.(partes.length > 1 ? 'Analizando parte ' + (i + 1) + ' de ' + partes.length + '…' : 'Analizando…');
+    avance?.('📖 Leyendo ' + partes[i].split(/\s+/).length.toLocaleString('es-AR') + ' palabras' + (partes.length > 1 ? ' (parte ' + (i + 1) + ' de ' + partes.length + ')' : '') + ' contra ' + S.ents.length + ' fichas de la wiki…');
     const usuario = ctx + '\n\n=== TEXTO A ANALIZAR ===\nTipo: ' + (en.tipo || 'notas') + (en.ses ? ' · Sesión ' + en.ses : '') + '\nTítulo: ' + (en.titulo || '') + (partes.length > 1 ? '\n(Parte ' + (i + 1) + ' de ' + partes.length + ')' : '') + '\n\n' + partes[i];
-    const j = await llamarIA(SISTEMA_IA, usuario), d = leerJSON(j.texto);
+    const j = await llamarIA(SISTEMA_IA, usuario, ev => { const l = leyendaIA(ev); if (l) avance?.(l); }); avance?.('🔗 Revisando y enlazando lo que devolvió…'); const d = leerJSON(j.texto);
     if (d.resumen_sesion) resumen += (resumen ? ' ' : '') + String(d.resumen_sesion).trim();
     props.push(...limpiarProps(d.propuestas)); en.modelo = j.modelo;
   }
@@ -5729,9 +5750,12 @@ function vEntradas(root) {
   root.append(h('div', { class: 'xbar' }, h('p', { class: 'nota-p' }, nube ? 'Pegá lo que escribió o dictó Frodo. La IA lo lee y arma propuestas en «Por revisar»; nada cambia hasta que aceptes.' : 'La IA necesita la versión conectada a la nube (como DM).'), h('span', { class: 'grow' }), h('button', { class: 'btn pri', onclick: () => editarEntrada() }, '+ Nueva entrada')),
     S.entradas.length ? S.entradas.map(en => {
       const n = pend(en.id), est = h('span', { class: 'lab' }, en.estado === 'analizada' ? 'Analizada · ' + (en.nProps ?? 0) + ' propuestas' + (n ? ' (' + n + ' sin resolver)' : '') : 'Sin analizar');
-      const b = h('button', { class: 'btn sm pri', onclick: async () => { b.disabled = true; try { const k = await analizarEntrada(en, t => { b.textContent = t; }); toast(k ? k + ' propuestas nuevas en Por revisar' : 'No encontró nada nuevo para proponer', 4000); } catch (e) { toast('No se pudo analizar: ' + e.message, 5000); } render(); } }, en.estado === 'analizada' ? 'Volver a analizar' : 'Analizar con IA');
+      const panel = h('div', { class: 'ia-panel', style: { display: 'none' } }), b = h('button', { class: 'btn sm pri', onclick: async () => {
+        b.disabled = true; b.textContent = 'Analizando…'; panel.style.display = ''; panel.innerHTML = ''; const reloj = h('div', { class: 'ia-reloj' }, '0 s'), log = h('div', { class: 'ia-log' }); panel.append(log, reloj); const t0 = Date.now(), tick = setInterval(() => { reloj.textContent = Math.round((Date.now() - t0) / 1000) + ' s · sigue trabajando'; }, 1000); let ultima = '';
+        const av = t => { if (t === ultima) return; ultima = t; const l = h('div', { class: 'l' }, t); log.append(l); while (log.children.length > 5) log.firstChild.remove(); };
+        try { const k = await analizarEntrada(en, av); toast(k ? k + ' propuestas nuevas en Por revisar' : 'No encontró nada nuevo para proponer', 4000); } catch (e) { toast('No se pudo analizar: ' + e.message, 9000); } clearInterval(tick); render(); } }, en.estado === 'analizada' ? 'Volver a analizar' : 'Analizar con IA');
       return h('div', { class: 'card ent-card' }, h('div', { class: 'lab' }, (TIPOS_ENTRADA.find(x => x[0] === en.tipo)?.[1] || 'Entrada') + (en.ses ? ' · Sesión ' + en.ses : '') + ' · ' + fechaCorta(en.t)), h('h3', {}, en.titulo), h('p', { class: 'res' }, en.txt.slice(0, 180).replace(/\s+/g, ' ') + (en.txt.length > 180 ? '…' : '')), est,
-        aplicadasDe(en),
+        panel, aplicadasDe(en),
         h('div', { class: 'hacc' }, nube ? b : null, n ? h('button', { class: 'btn sm', onclick: () => Nav.ir('revisar') }, 'Ver propuestas') : null, h('button', { class: 'btn sm', onclick: () => editarEntrada(en) }, 'Editar')));
     }) : h('p', { class: 'empty' }, 'Todavía no hay entradas.'));
 }
