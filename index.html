@@ -604,7 +604,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.12.1';
+const VERSION = '0.12.2';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -817,6 +817,7 @@ function ruido(w, hh) {
 }
 const suave = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 /* niveles de zoom (como un mapa en línea): 1 reino/océano, 2 capital o ciudad, 3 pueblo, 4 aldea o detalle */
+const sli = (lab, val, min, max, step, fn, u, fin) => h('div', {}, h('label', { class: 'lab' }, lab + ' · ' + val + (u || '')), h('input', { type: 'range', min, max, step, value: val, oninput: e => { fn(+e.target.value); e.target.previousSibling.textContent = lab + ' · ' + e.target.value + (u || ''); }, onchange: () => (fin || (() => {}))() }));
 const NIV_Z = [0, 0, 1.3, 2.6, 4.2], NIV_N = ['', 'Reino', 'Ciudad', 'Pueblo', 'Detalle'];
 const alfaNiv = (niv, z) => { niv = clamp(niv || 3, 1, 4); const mn = NIV_Z[niv]; return mn ? suave(mn * .8, mn * 1.05, z) : 1; };
 const ESTILOS = {
@@ -999,7 +1000,7 @@ const Atlas = {
   },
   /* un mismo acabado sobre todo (pintura, líneas, textos, íconos): viñeta, grano y, al acercar, textura fina */
   acabado(c) {
-    const cw = this.cv.width, ch = this.cv.height, z = this.lz;
+    const cw = this.cv.width, ch = this.cv.height, z = this.lz, A = clamp(S.mapa.ap?.ac ?? 1, 0, 2);
     if (!this._grano) {
       const mk = (n, oct) => { const t = document.createElement('canvas'); t.width = t.height = n; const x = t.getContext('2d'), im = x.createImageData(n, n), g = []; const R = mulberry(oct.seed);
         for (const [cell, amp] of oct.l) { const gn = Math.ceil(n / cell) + 1, v = Array.from({ length: gn * gn }, () => R()); g.push([cell, amp, gn, v]); }
@@ -1009,10 +1010,10 @@ const Atlas = {
       this._grano = mk(160, { seed: 11, l: [[1, .55], [2, .45]] }); this._detalle = mk(256, { seed: 23, l: [[3, .22], [7, .28], [18, .3], [48, .2]] });
     }
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
-    c.globalCompositeOperation = 'overlay'; c.globalAlpha = .08; c.fillStyle = c.createPattern(this._grano, 'repeat'); c.fillRect(0, 0, cw, ch);
-    const dz = suave(1.6, 5, z); if (dz > .01) { const pt = c.createPattern(this._detalle, 'repeat'), sc = this.view.k * this.dpr * 2.2; pt.setTransform(new DOMMatrix([sc, 0, 0, sc, this.view.x * this.dpr, this.view.y * this.dpr])); c.globalAlpha = .34 * dz; c.fillStyle = pt; c.fillRect(0, 0, cw, ch); }
+    c.globalCompositeOperation = 'overlay'; c.globalAlpha = .08 * A; c.fillStyle = c.createPattern(this._grano, 'repeat'); c.fillRect(0, 0, cw, ch);
+    const dz = suave(1.6, 5, z); if (dz > .01) { const pt = c.createPattern(this._detalle, 'repeat'), sc = this.view.k * this.dpr * 2.2; pt.setTransform(new DOMMatrix([sc, 0, 0, sc, this.view.x * this.dpr, this.view.y * this.dpr])); c.globalAlpha = Math.min(1, .34 * dz * A); c.fillStyle = pt; c.fillRect(0, 0, cw, ch); }
     c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
-    const g = c.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * .35, cw / 2, ch / 2, Math.hypot(cw, ch) * .62); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(4,6,9,.5)'); c.fillStyle = g; c.fillRect(0, 0, cw, ch);
+    const g = c.createRadialGradient(cw / 2, ch / 2, Math.min(cw, ch) * .35, cw / 2, ch / 2, Math.hypot(cw, ch) * .62); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(4,6,9,' + (.5 * A).toFixed(2) + ')'); c.fillStyle = g; c.fillRect(0, 0, cw, ch);
     c.restore();
   },
   /* migas de pan: Hazar › reino más cercano al centro de la vista, cuando se acerca */
@@ -1030,15 +1031,15 @@ const Atlas = {
     const sel = this.sel?.tipo === 'ruta' && this.sel.id === r.id, k = viaje ? 1 : 1;
     c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
     const camino = () => { c.beginPath(); c.moveTo(...r.pts[0]); for (const b of tramos(r)) c.bezierCurveTo(b[1][0], b[1][1], b[2][0], b[2][1], b[3][0], b[3][1]); };
-    const fut = (r.sesion || 1) > S.ses && esDM(), z = this.lz, sc = clamp(this.f, .3, 1.4);
+    const fut = (r.sesion || 1) > S.ses && esDM(), z = this.lz, ap = S.mapa.ap || {}, sc = clamp(this.f, .3, 1.4) * clamp((ap[r.tipo] ?? 1) * (r.gr ?? 1), .1, 6), col = r.col, dash = d => r.lin === 'cont' ? [] : r.lin === 'punt' ? [5 * sc, 8 * sc] : d;
     const la = r.tipo === 'camino' ? suave(1.2, 1.9, z) : r.tipo === 'frontera' ? 1 - suave(3.2, 4.8, z) * .7 : r.tipo === 'rio' ? 1 : suave(1, 1.6, z); if (la < .02 && !sel) { c.restore(); return; }
     c.globalAlpha = la < .02 ? .4 : la;
-    if (r.tipo === 'rio') { camino(); c.strokeStyle = '#3d6a84'; c.lineWidth = 7 * sc; c.stroke(); camino(); c.strokeStyle = '#8fb8c9'; c.lineWidth = 3 * sc; c.stroke(); }
-    else if (r.tipo === 'camino') { camino(); c.strokeStyle = S.mapa.estilo === 'ceniza' ? 'rgba(220,190,150,.8)' : 'rgba(80,45,30,.75)'; c.lineWidth = 3.2 * sc; c.setLineDash([9 * sc, 7 * sc]); c.stroke(); }
-    else if (r.tipo === 'frontera') { const osc = S.mapa.estilo === 'ceniza'; camino(); c.strokeStyle = osc ? 'rgba(236,200,130,.85)' : 'rgba(110,40,30,.8)'; c.lineWidth = 2.4 * sc; c.setLineDash([2 * sc, 7 * sc, 12 * sc, 7 * sc]); c.stroke(); }
-    else if (r.tipo === 'futuro') { camino(); c.strokeStyle = 'rgba(70,90,120,.7)'; c.lineWidth = 3.4; c.setLineDash([3, 9]); c.stroke(); }
-    else { camino(); c.strokeStyle = 'rgba(30,15,10,.55)'; c.lineWidth = 8 * sc; c.stroke(); camino(); c.strokeStyle = fut ? 'rgba(180,70,50,.4)' : '#b5362a'; c.lineWidth = 4.2 * sc; c.setLineDash([12 * sc, 8 * sc]); c.stroke(); c.setLineDash([]);
-      const tl = tramos(r).pop(), a = tl[3], b = Math.hypot(a[0] - tl[2][0], a[1] - tl[2][1]) > 1 ? tl[2] : tl[0], ang = Math.atan2(a[1] - b[1], a[0] - b[0]); c.translate(a[0], a[1]); c.rotate(ang); c.scale(sc, sc); c.fillStyle = fut ? 'rgba(180,70,50,.4)' : '#b5362a'; c.beginPath(); c.moveTo(0, 0); c.lineTo(-20, -10); c.lineTo(-20, 10); c.fill(); }
+    if (r.tipo === 'rio') { camino(); c.strokeStyle = '#3d6a84'; c.lineWidth = 7 * sc; c.stroke(); camino(); c.strokeStyle = col || '#8fb8c9'; c.lineWidth = 3 * sc; c.stroke(); }
+    else if (r.tipo === 'camino') { camino(); c.strokeStyle = col || (S.mapa.estilo === 'ceniza' ? 'rgba(220,190,150,.8)' : 'rgba(80,45,30,.75)'); c.lineWidth = 3.2 * sc; c.setLineDash(dash([9 * sc, 7 * sc])); c.stroke(); }
+    else if (r.tipo === 'frontera') { const osc = S.mapa.estilo === 'ceniza'; camino(); c.strokeStyle = col || (osc ? 'rgba(236,200,130,.85)' : 'rgba(110,40,30,.8)'); c.lineWidth = 2.4 * sc; c.setLineDash(dash([2 * sc, 7 * sc, 12 * sc, 7 * sc])); c.stroke(); }
+    else if (r.tipo === 'futuro') { camino(); c.strokeStyle = col || 'rgba(70,90,120,.7)'; c.lineWidth = 3.4 * sc; c.setLineDash(dash([3 * sc, 9 * sc])); c.stroke(); }
+    else { camino(); c.strokeStyle = 'rgba(30,15,10,.55)'; c.lineWidth = 8 * sc; c.stroke(); camino(); c.strokeStyle = fut ? 'rgba(180,70,50,.4)' : (col || '#b5362a'); c.lineWidth = 4.2 * sc; c.setLineDash(dash([12 * sc, 8 * sc])); c.stroke(); c.setLineDash([]);
+      const tl = tramos(r).pop(), a = tl[3], b = Math.hypot(a[0] - tl[2][0], a[1] - tl[2][1]) > 1 ? tl[2] : tl[0], ang = Math.atan2(a[1] - b[1], a[0] - b[0]); c.translate(a[0], a[1]); c.rotate(ang); c.scale(sc, sc); c.fillStyle = fut ? 'rgba(180,70,50,.4)' : (col || '#b5362a'); c.beginPath(); c.moveTo(0, 0); c.lineTo(-20, -10); c.lineTo(-20, 10); c.fill(); }
     c.restore();
     if (sel && !this.exportando && this.puedeEditar()) { c.save(); const k = this.view.k, nd = this.nodo && this.nodo.id === r.id ? this.nodo.i : -1;
       r.pts.forEach((p, i) => { const on = i === nd, rad = (on ? 12 : 9) / k; c.beginPath(); if (p[2]) c.rect(p[0] - rad, p[1] - rad, rad * 2, rad * 2); else c.arc(p[0], p[1], rad, 0, 7); c.fillStyle = on ? '#e1be78' : '#f2d493'; c.fill(); c.strokeStyle = on ? '#fff' : '#1a1409'; c.lineWidth = (on ? 3 : 2) / k; c.stroke(); }); c.restore(); }
@@ -1052,18 +1053,18 @@ const Atlas = {
     if (dm && !this.exportando) { c.save(); c.setLineDash([8, 8]); c.lineWidth = 2 / this.view.k; for (const d of m.niebla) { c.strokeStyle = d.sesion > S.ses ? 'rgba(208,114,74,.35)' : 'rgba(225,190,120,.55)'; c.beginPath(); c.arc(d.x, d.y, d.r * .9, 0, 7); c.stroke(); } c.restore(); }
   },
   dibujarPin(c, p, dm) {
-    const sp = SPR[p.icon]; const e = p.ent ? porId(p.ent) : null, F = this.f, w = (p.w || 60) * F, hh = sp ? w * sp.h / sp.w : 40 * F;
+    const sp = SPR[p.icon]; const e = p.ent ? porId(p.ent) : null, F = this.f * (S.mapa.ap?.pin ?? 1), w = (p.w || 60) * F, hh = sp ? w * sp.h / sp.w : 40 * F;
     const fut = dm && (p.rev > S.ses || (e && e.vis === 'dm')), la = alfaNiv(p.niv, this.lz); if (la < .02 && this.sel?.id !== p.id) return;
     const osc = S.mapa.estilo === 'ceniza', al = (fut ? .5 : 1) * Math.max(la, this.sel?.id === p.id ? .6 : 0);
     c.save(); c.globalAlpha = al; if (osc) { c.shadowColor = 'rgba(0,0,0,.85)'; c.shadowBlur = 7; }
     if (sp) c.drawImage(tinted(p.icon, this.sel?.id === p.id ? (osc ? '#f0a58a' : '#a3261a') : (osc ? '#efe3c4' : INK.tinta)), p.x - w / 2, p.y - hh, w, hh); c.shadowBlur = 0;
-    const nombre = p.nombre || e?.nombre || ''; if (nombre) this.texto(c, nombre, p.x, p.y + 20 * F, Math.max(18, Math.min(26, (p.w || 60) * .3)) * F, 'lugar');
+    const nombre = p.nombre || e?.nombre || ''; if (nombre) this.texto(c, nombre, p.x, p.y + 20 * F, Math.max(18, Math.min(26, (p.w || 60) * .3)) * F * (S.mapa.ap?.tx ?? 1), 'lugar');
     c.restore();
   },
   dibujarEtiqueta(c, t) {
     const niv = t.niv || (t.est === 'region' || t.est === 'mar' ? 1 : 3), z = this.lz, fijo = t.est === 'region' || t.est === 'mar';
     let a = alfaNiv(niv, z); if (niv === 1) a *= 1 - suave(2.4, 3.6, z); if (a < .02 && this.sel?.id !== t.id) return; if (a < .02) a = .6;
-    c.save(); c.globalAlpha = a; this.texto(c, t.txt, t.x, t.y, t.sz * (fijo ? 1 : this.f), t.est, this.sel?.id === t.id); c.restore();
+    c.save(); c.globalAlpha = a; this.texto(c, t.txt, t.x, t.y, t.sz * (fijo ? 1 : this.f * (S.mapa.ap?.tx ?? 1)), t.est, this.sel?.id === t.id); c.restore();
   },
   texto(c, txt, x, y, sz, est, sel) {
     const oscuro = (S.mapa.estilo === 'ceniza');
@@ -1360,6 +1361,10 @@ const Atlas = {
         h('label', { class: 'lab f' }, 'Tipo'), h('select', { onchange: ev => { sel.tipo = ev.target.value; this.confirmar(); this.pedirDibujo(); this.panel(); } }, [['viaje', 'Viaje del grupo'], ['camino', 'Camino'], ['rio', 'Río'], ['frontera', 'Frontera'], ['futuro', 'Ruta posible']].map(([v, n]) => h('option', { value: v, selected: sel.tipo === v }, n))),
         h('label', { class: 'lab f' }, 'Visible desde la sesión'), h('input', { type: 'number', min: 1, max: 99, value: sel.sesion || 1, onchange: ev => { sel.sesion = +ev.target.value; this.confirmar(); this.pedirDibujo(); } }),
         h('label', { class: 'lab f' }, 'Forma'), h('div', { class: 'seg' }, [['curva', 'Curva'], ['recta', 'Recta']].map(([v, n]) => h('button', { class: (sel.forma || 'curva') === v ? 'on' : '', onclick: () => { sel.forma = v === 'recta' ? 'recta' : undefined; this.confirmar(); this.pedirDibujo(); this.panel(); } }, n))),
+        h('div', { class: 'lab f' }, 'Aspecto de la línea'),
+        sli('Grosor', Math.round((sel.gr ?? 1) * 100), 20, 500, 5, v => { sel.gr = v / 100; this.pedirDibujo(); }, '%', () => this.confirmar()),
+        h('div', { class: 'seg' }, [['', 'Original'], ['cont', 'Lisa'], ['punt', 'Puntos']].map(([v, n]) => h('button', { class: (sel.lin || '') === v ? 'on' : '', onclick: () => { sel.lin = v || undefined; this.confirmar(); this.pedirDibujo(); this.panel(); } }, n))),
+        h('label', { class: 'lab f chk' }, 'Color ', h('input', { type: 'color', value: sel.col || '#d9b36a', oninput: ev => { sel.col = ev.target.value; this.pedirDibujo(); }, onchange: () => this.confirmar() }), h('button', { class: 'btn', onclick: () => { delete sel.col; this.confirmar(); this.pedirDibujo(); this.panel(); } }, 'Color original')),
         this.nodoUI(sel),
         h('p', { class: 'empty' }, 'Arrastrá un nodo para moverlo. Tocá la línea para agregar un nodo nuevo ahí mismo. Alt + clic o Supr sobre un nodo lo quita.'),
         h('div', { style: { marginTop: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap' } }, h('button', { class: 'btn', onclick: () => this.prolongar(sel) }, 'Prolongar'), h('button', { class: 'btn', onclick: () => { sel.pts.reverse(); this.nodo = null; this.confirmar(); this.pedirDibujo(); this.panel(); } }, 'Invertir sentido'), h('button', { class: 'btn peligro', onclick: () => this.borrarSel() }, 'Borrar ruta')));
@@ -1390,7 +1395,7 @@ const Atlas = {
     if (t === 'ruta') { p.append(h('h3', {}, 'Ruta nueva'), h('label', { class: 'lab f' }, 'Tipo'), h('select', { onchange: e => o.rutaTipo = e.target.value }, [['viaje', 'Viaje del grupo'], ['camino', 'Camino'], ['rio', 'Río'], ['frontera', 'Frontera'], ['futuro', 'Ruta posible']].map(([v, n]) => h('option', { value: v, selected: o.rutaTipo === v }, n))), h('p', { class: 'empty' }, 'Un clic por punto, doble clic para terminar.')); return; }
     if (t === 'niebla') { p.append(h('h3', {}, 'Revelar zona'), slider('Radio', o.nieblaR, 60, 700, 10, v => o.nieblaR = v), h('p', { class: 'empty' }, 'Cada círculo queda oculto para el grupo hasta la sesión que indiques. Se crea con la sesión elegida arriba.')); return; }
     if (t === 'pin') { p.append(h('h3', {}, 'Lugar nuevo'), h('div', { class: 'lab' }, 'Ícono'), h('div', { class: 'pal' }, Object.values(SPR).filter(s => s.cat === 'icons' || s.cat === 'buildings').map(s => h('button', { class: o.icono === s.id ? 'on' : '', onclick: () => { o.icono = s.id; this.panel(); } }, h('img', { src: s.src }))))); return; }
-    p.append(h('h3', {}, 'Mapa'), dm ? this.hazarUI() : null, this.estiloUI(), this.islaUI(),
+    p.append(h('h3', {}, 'Mapa'), dm ? this.hazarUI() : null, dm ? this.apUI() : null, this.estiloUI(), this.islaUI(),
       h('div', { class: 'lab' }, 'Salida'), h('button', { class: 'btn', onclick: () => this.exportarPNG() }, 'Descargar imagen (PNG)'),
       h('p', { class: 'empty' }, 'La imagen respeta el modo (Grupo o DM) y la sesión elegida: sirve de handout.'));
   },
@@ -1440,6 +1445,14 @@ const Atlas = {
         c.modo === 'repetir' ? [sl('Tamaño de cada loseta (del ancho del mapa)', c.esc || 30, 5, 100, 1, v => cambiar({ esc: v })), h('label', { class: 'lab f chk' }, h('input', { type: 'checkbox', checked: !!c.espejo, onchange: e => cambiar({ espejo: e.target.checked }) }), ' Espejar bordes (sin costuras)')] : sl('Zoom de la imagen', c.zoom || 100, 100, 400, 5, v => cambiar({ zoom: v })));
     };
     return h('div', {}, h('div', { class: 'lab' }, 'Estilo'), h('div', { class: 'seg' }, Object.entries(ESTILOS).map(([k, v]) => h('button', { class: m.estilo === k ? 'on' : '', onclick: () => { m.estilo = k; this.terrDirty = true; this.confirmar(); this.pedirDibujo(); this.panel(); } }, v.nombre))), texUI('papel', m.papel ? 'Fondo de tierra · tu imagen' : 'Fondo de tierra · papel del pack'), subir('papel', 'Textura de papel o tierra (propia)'), m.oceano ? texUI('oceano', 'Fondo de océano') : null, subir('oceano', 'Textura de océano (propia)'));
+  },
+  /* apariencia general: grosor de cada tipo de línea, tamaño de lugares y textos, fuerza del acabado */
+  apUI() {
+    const ap = S.mapa.ap = S.mapa.ap || {}, def = { frontera: 1, rio: 1, camino: 1, viaje: 1, futuro: 1, pin: 1, tx: 1, ac: 1 };
+    const fila = (k, n) => sli(n, Math.round((ap[k] ?? 1) * 100), k === 'ac' ? 0 : 20, k === 'ac' ? 200 : 500, 5, v => { ap[k] = v / 100; this.pedirDibujo(); }, '%', () => this.confirmar());
+    return h('details', { class: 'capasd' }, h('summary', {}, 'Apariencia: grosores y tamaños'),
+      fila('frontera', 'Límites (fronteras)'), fila('rio', 'Ríos'), fila('camino', 'Caminos'), fila('viaje', 'Viaje del grupo'), fila('futuro', 'Rutas posibles'), fila('pin', 'Tamaño de lugares'), fila('tx', 'Tamaño de nombres'), fila('ac', 'Acabado (grano, viñeta, textura)'),
+      h('button', { class: 'btn', onclick: () => { S.mapa.ap = { ...def }; this.confirmar(); this.pedirDibujo(); this.panel(); } }, 'Restablecer'));
   },
   islaUI() {
     return h('div', {}, h('div', { class: 'lab' }, 'Agregar una forma de tierra del pack'), h('div', { class: 'pal' }, Object.values(ASSETS._isl).map(i => h('button', { onclick: () => this.agregarIsla(i.id), title: i.id }, h('img', { src: i.src, style: { filter: 'invert(.75)' } })))));
