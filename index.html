@@ -479,6 +479,7 @@ details.ed-mas>summary{font-size:13px}
 .lacre i:first-child{left:0;border-radius:27px 0 0 27px;--d:-1}.lacre i:last-child{right:0;border-radius:0 27px 27px 0;--d:1;clip-path:polygon(0 0,100% 0,100% 100%,0 100%,30% 55%)}
 @keyframes lacre{0%{transform:none;opacity:1}35%{transform:translateX(calc(var(--d)*3px))}100%{transform:translate(calc(var(--d)*34px),26px) rotate(calc(var(--d)*38deg));opacity:0}}
 @media (prefers-reduced-motion:reduce){.lacre{display:none}}
+.aplicadas{margin-top:10px}.aplicadas summary{cursor:pointer;color:var(--mut);font-size:13.5px}
 
 </style>
 </head>
@@ -618,7 +619,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.16.0';
+const VERSION = '0.16.1';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -5653,6 +5654,18 @@ async function analizarEntrada(en, avance) {
   return nuevas.length;
 }
 
+const _snap = e => { const v = clonar(e); delete v.imagen; return v; };
+/* deshacer lo que aplicó una propuesta (cada una guarda cómo volver atrás) */
+function deshacerProp(p) {
+  const u = p.undo; if (!u) throw new Error('No hay cómo deshacer esta');
+  if (u.k === 'ent') { const e = porId(u.id); if (e) quitarEnt(u.id); }
+  else if (u.k === 'ficha') { const e = porId(u.id); if (!e) throw new Error('La ficha ya no existe'); const img = e.imagen; for (const k of Object.keys(e)) if (k !== 'id') delete e[k]; Object.assign(e, clonar(u.snap), { imagen: img || '' }); }
+  else if (u.k === 'pin') { if (S.mapa) S.mapa.pines = S.mapa.pines.filter(x => x.id !== u.pin); if (u.ent) quitarEnt(u.ent); }
+  else if (u.k === 'cita') S.citas = (S.citas || []).filter(c => c.id !== u.id);
+  invalidarIdx(); p.estado = 'deshecha'; delete p.undo;
+}
+function quitarEnt(id) { S.ents = S.ents.filter(x => x.id !== id); S.ents.forEach(x => { x.rel = (x.rel || []).filter(r => r.d !== id); if (x.padre === id) x.padre = null; }); if (S.mapa) S.mapa.pines = S.mapa.pines.filter(x => x.ent !== id); }
+
 /* ---- aplicar una propuesta (siempre con historial y todo oculto para jugadores) ---- */
 const DIR = { norte: [0, -1], noreste: [.7, -.7], este: [1, 0], sureste: [.7, .7], sur: [0, 1], suroeste: [-.7, .7], oeste: [-1, 0], noroeste: [-.7, -.7], encima: [0, -.3] };
 const DIST = { adyacente: .03, cerca: .07, lejos: .18 };
@@ -5661,10 +5674,10 @@ function aplicarProp(p) {
   if (p.tipo === 'ficha_nueva') {
     const n = txt(p.nombre), padre = porId(p.ubicacion_id) ? p.ubicacion_id : null;
     const e = { id: slugUnico(n), tipo: TIPOS[p.clase] ? p.clase : 'concepto', nombre: n, alias: (p.alias || []).map(txt).filter(Boolean), errores: [], resumen: txt(p.resumen), cuerpo: txt(p.descripcion), secreto: '', padre, rel: [], vis: 'dm', rev: S.ses, ficha: true, etiquetas: [], imagen: '', jugador: '', origenIA: Date.now() };
-    S.ents.push(e); invalidarIdx(); return 'Ficha «' + n + '» creada (oculta para jugadores)';
+    S.ents.push(e); invalidarIdx(); p.undo = { k: 'ent', id: e.id }; return 'Ficha «' + n + '» creada (oculta para jugadores)';
   }
   if (p.tipo === 'ficha_editar') {
-    const e = porId(p.ficha); if (!e) throw new Error('La ficha ya no existe'); anotarHist(e, 'IA: ' + (txt(p.motivo) || p.campo));
+    const e = porId(p.ficha); if (!e) throw new Error('La ficha ya no existe'); anotarHist(e, 'IA: ' + (txt(p.motivo) || p.campo)); p.undo = { k: 'ficha', id: e.id, snap: _snap(e) };
     const v = p.valor, lista = Array.isArray(v) ? v.map(txt).filter(Boolean) : [txt(v)].filter(Boolean);
     if (p.campo === 'alias') e.alias = [...new Set([...(e.alias || []), ...lista])];
     else if (p.campo === 'errores_grafia') e.errores = [...new Set([...(e.errores || []), ...lista])];
@@ -5675,22 +5688,22 @@ function aplicarProp(p) {
   if (p.tipo === 'vinculo') {
     const e = porId(p.de_id), d = porId(p.a_id); if (!e || !d) throw new Error('Falta una de las fichas'); e.rel = e.rel || [];
     if (e.rel.some(r => r.d === d.id && norm(r.t) === norm(p.relacion))) return 'Ese vínculo ya existía';
-    anotarHist(e, 'IA: vínculo'); e.rel.push({ t: txt(p.relacion), d: d.id }); return e.nombre + ' ' + txt(p.relacion) + ' ' + d.nombre;
+    anotarHist(e, 'IA: vínculo'); p.undo = { k: 'ficha', id: e.id, snap: _snap(e) }; e.rel.push({ t: txt(p.relacion), d: d.id }); return e.nombre + ' ' + txt(p.relacion) + ' ' + d.nombre;
   }
   if (p.tipo === 'evento') {
     const n = txt(p.nombre), e = { id: slugUnico(n), tipo: 'evento', nombre: n, alias: [], errores: [], resumen: txt(p.resumen), cuerpo: '', secreto: '', padre: null, rel: (p.entidades_ids || []).filter(porId).map(d => ({ t: 'involucra a', d })), vis: 'dm', rev: S.ses, ficha: true, etiquetas: [], imagen: '', jugador: '', campos: { Fecha: txt(p.fecha) }, origenIA: Date.now() };
-    S.ents.push(e); invalidarIdx(); return 'Evento «' + n + '» creado (oculto para jugadores)';
+    S.ents.push(e); invalidarIdx(); p.undo = { k: 'ent', id: e.id }; return 'Evento «' + n + '» creado (oculto para jugadores)';
   }
   if (p.tipo === 'mapa') {
     const m = S.mapa, base = m?.pines.find(x => x.ent === p.cerca_de_id); if (!m || !base) throw new Error('El lugar de referencia no tiene pin en el mapa');
-    let ent = porId(p.entidad_id);
-    if (!ent) { const n = txt(p.nombre_nuevo); ent = { id: slugUnico(n), tipo: 'lugar', nombre: n, alias: [], errores: [], resumen: '', cuerpo: '', secreto: '', padre: null, rel: [], vis: 'dm', rev: S.ses, ficha: true, etiquetas: [], imagen: '', jugador: '', origenIA: Date.now() }; S.ents.push(ent); invalidarIdx(); }
+    let ent = porId(p.entidad_id), creada = false;
+    if (!ent) { creada = true; const n = txt(p.nombre_nuevo); ent = { id: slugUnico(n), tipo: 'lugar', nombre: n, alias: [], errores: [], resumen: '', cuerpo: '', secreto: '', padre: null, rel: [], vis: 'dm', rev: S.ses, ficha: true, etiquetas: [], imagen: '', jugador: '', origenIA: Date.now() }; S.ents.push(ent); invalidarIdx(); }
     if (m.pines.some(x => x.ent === ent.id)) return 'Ya tiene pin: movelo a mano si hace falta';
     const [dx, dy] = DIR[p.direccion] || [0, 0], k = (DIST[p.distancia] || .07) * (m.w || 2400);
-    m.pines.push({ id: uid(), x: Math.round(base.x + dx * k), y: Math.round(base.y + dy * k), ent: ent.id, icon: base.icon || 'town_village', w: base.w || 64, rev: S.ses + 1, nuevoIA: true });
+    const pin = { id: uid(), x: Math.round(base.x + dx * k), y: Math.round(base.y + dy * k), ent: ent.id, icon: base.icon || 'town_village', w: base.w || 64, rev: S.ses + 1, nuevoIA: true }; m.pines.push(pin); p.undo = { k: 'pin', pin: pin.id, ent: creada ? ent.id : null };
     return 'Pin de «' + ent.nombre + '» puesto cerca de ' + (porId(base.ent)?.nombre || 'la referencia') + ' (ajustalo en el Atlas)';
   }
-  if (p.tipo === 'cita') { S.citas = S.citas || []; S.citas.push({ id: uid(), txt: txt(p.frase), quien: txt(p.quien), ses: S.ses, t: Date.now() }); return 'Cita guardada'; }
+  if (p.tipo === 'cita') { S.citas = S.citas || []; const c = { id: uid(), txt: txt(p.frase), quien: txt(p.quien), ses: S.ses, t: Date.now() }; S.citas.push(c); p.undo = { k: 'cita', id: c.id }; return 'Cita guardada'; }
   if (p.tipo === 'contradiccion') return 'Anotado como revisado';
   throw new Error('Tipo desconocido');
 }
@@ -5718,8 +5731,17 @@ function vEntradas(root) {
       const n = pend(en.id), est = h('span', { class: 'lab' }, en.estado === 'analizada' ? 'Analizada · ' + (en.nProps ?? 0) + ' propuestas' + (n ? ' (' + n + ' sin resolver)' : '') : 'Sin analizar');
       const b = h('button', { class: 'btn sm pri', onclick: async () => { b.disabled = true; try { const k = await analizarEntrada(en, t => { b.textContent = t; }); toast(k ? k + ' propuestas nuevas en Por revisar' : 'No encontró nada nuevo para proponer', 4000); } catch (e) { toast('No se pudo analizar: ' + e.message, 5000); } render(); } }, en.estado === 'analizada' ? 'Volver a analizar' : 'Analizar con IA');
       return h('div', { class: 'card ent-card' }, h('div', { class: 'lab' }, (TIPOS_ENTRADA.find(x => x[0] === en.tipo)?.[1] || 'Entrada') + (en.ses ? ' · Sesión ' + en.ses : '') + ' · ' + fechaCorta(en.t)), h('h3', {}, en.titulo), h('p', { class: 'res' }, en.txt.slice(0, 180).replace(/\s+/g, ' ') + (en.txt.length > 180 ? '…' : '')), est,
+        aplicadasDe(en),
         h('div', { class: 'hacc' }, nube ? b : null, n ? h('button', { class: 'btn sm', onclick: () => Nav.ir('revisar') }, 'Ver propuestas') : null, h('button', { class: 'btn sm', onclick: () => editarEntrada(en) }, 'Editar')));
     }) : h('p', { class: 'empty' }, 'Todavía no hay entradas.'));
+}
+
+function aplicadasDe(en) {
+  const L = (S.props || []).filter(p => p.entrada === en.id && p.estado === 'aceptada' && p.undo).sort((a, b) => (b.aceptadaT || 0) - (a.aceptadaT || 0)); if (!L.length) return null;
+  const des = (xs, msg) => { let n = 0; xs.forEach(p => { try { deshacerProp(p); n++; } catch (_) { } }); guardar(); render(); toast(msg(n)); };
+  return h('details', { class: 'aplicadas' }, h('summary', {}, 'Cambios aplicados · ' + L.length),
+    L.map(p => h('div', { class: 'sug' }, h('div', { class: 'lab' }, ETQ_PROP[p.tipo]), h('div', {}, textoProp(p)[0]), h('div', { class: 'a' }, h('button', { class: 'btn sm', onclick: () => des([p], () => 'Deshecho') }, 'Deshacer')))),
+    h('button', { class: 'btn sm peligro', style: { marginTop: '8px' }, onclick: () => preguntarSiNo('Se deshacen los ' + L.length + ' cambios de esta entrada y las fichas vuelven a como estaban.', () => des(L, n => n + ' cambios deshechos')) }, 'Deshacer todo'));
 }
 
 /* ---- propuestas dentro de Revisar ---- */
@@ -5737,11 +5759,11 @@ function textoProp(p) {
 function bloquePropuestas() {
   const L = (S.props || []).filter(p => p.estado === 'pendiente'); if (!L.length) return null;
   const caja = h('div', { class: 'props' }, h('h3', {}, 'Propuestas de la IA · ' + L.length));
-  const resolver = (p, ok) => { if (ok) { try { const m = aplicarProp(p); p.estado = 'aceptada'; toast(m, 3200); } catch (e) { toast('No se pudo aplicar: ' + e.message, 4500); return; } } else p.estado = 'rechazada'; guardar(); render(); };
+  const resolver = (p, ok) => { if (ok) { try { const m = aplicarProp(p); p.estado = 'aceptada'; p.aceptadaT = Date.now(); toast(m + ' · se puede deshacer en Sesiones → Entradas', 4200); } catch (e) { toast('No se pudo aplicar: ' + e.message, 4500); return; } } else p.estado = 'rechazada'; guardar(); render(); };
   const porEntrada = new Map(); L.forEach(p => { if (!porEntrada.has(p.entrada)) porEntrada.set(p.entrada, []); porEntrada.get(p.entrada).push(p); });
   for (const [eid, xs] of porEntrada) {
     const en = (S.entradas || []).find(x => x.id === eid);
-    caja.append(h('div', { class: 'lab f' }, 'De: ' + (en?.titulo || 'entrada'), ' · ', h('a', { class: 'term', onclick: () => { const seg = xs.filter(p => p.confianza === 'alta' && ['ficha_editar', 'vinculo'].includes(p.tipo)); if (!seg.length) return toast('No hay cambios seguros de alta confianza para aceptar juntos'); preguntarSiNo('Aceptar ' + seg.length + ' cambios de alta confianza (vínculos y datos agregados)? Las fichas nuevas, los pines y lo demás los revisás uno por uno.', () => { seg.forEach(p => { try { aplicarProp(p); p.estado = 'aceptada'; } catch (_) { } }); guardar(); render(); }); } }, 'aceptar los seguros')));
+    caja.append(h('div', { class: 'lab f' }, 'De: ' + (en?.titulo || 'entrada'), ' · ', h('a', { class: 'term', onclick: () => { const seg = xs.filter(p => p.confianza === 'alta' && ['ficha_editar', 'vinculo'].includes(p.tipo)); if (!seg.length) return toast('No hay cambios seguros de alta confianza para aceptar juntos'); preguntarSiNo('Aceptar ' + seg.length + ' cambios de alta confianza (vínculos y datos agregados)? Las fichas nuevas, los pines y lo demás los revisás uno por uno.', () => { seg.forEach(p => { try { aplicarProp(p); p.estado = 'aceptada'; p.aceptadaT = Date.now(); } catch (_) { } }); guardar(); render(); }); } }, 'aceptar los seguros')));
     xs.forEach(p => { const [t, d] = textoProp(p); caja.append(h('div', { class: 'sug prop ' + p.confianza }, h('div', { class: 'f' }, h('span', { class: 'lab' }, ETQ_PROP[p.tipo] + ' · confianza ' + p.confianza), h('div', {}, t)), d ? h('div', { class: 'm' }, d) : null, p.aviso ? h('div', { class: 'm' }, '⚠ ' + p.aviso) : null, h('div', { class: 'm ev' }, '«' + p.evidencia + '»'),
       h('div', { class: 'a' }, h('button', { class: 'btn sm pri', onclick: () => resolver(p, true) }, p.tipo === 'contradiccion' ? 'Entendido' : 'Aceptar'), h('button', { class: 'btn sm', onclick: () => resolver(p, false) }, 'Rechazar')))); });
   }
