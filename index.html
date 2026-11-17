@@ -620,7 +620,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.16.3';
+const VERSION = '0.16.4';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -5603,7 +5603,19 @@ function partirTexto(t, max = 160000) {
   if (cur) out.push(cur); return out;
 }
 
+/* si Gemini está saturado (503/timeout en todos los modelos) reintenta solo, esperando cada vez más */
 async function llamarIA(sistema, usuario, alAvance) {
+  const esperas = [10, 25, 50];
+  for (let i = 0; ; i++) {
+    try { return await llamarIA1(sistema, usuario, alAvance); }
+    catch (e) {
+      const sat = /503|429|524|high demand|tardó más|overloaded|UNAVAILABLE/i.test(e.message);
+      if (!sat || i >= esperas.length) throw e;
+      for (let s = esperas[i]; s > 0; s--) { alAvance?.({ pensando: '**Gemini saturado · reintento ' + (i + 1) + '/' + esperas.length + ' en ' + s + ' s**' }); await new Promise(r => setTimeout(r, 1000)); }
+    }
+  }
+}
+async function llamarIA1(sistema, usuario, alAvance) {
   if (!NUBE.on || NUBE.rol !== 'dm') throw new Error('La IA necesita estar conectado a la nube como DM.');
   const tok = await FB.auth.currentUser.getIdToken();
   const r = await fetch(IA_URL(), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ cid: NUBE.cid, system: sistema, user: usuario, stream: true }) });
