@@ -458,6 +458,7 @@ details.ed-mas>summary{font-size:13px}
 .capa .cb,.capa .cr{min-width:30px}.capa .cn{white-space:nowrap;font-size:15px}.capasd>summary{font-size:14px}
 
 .cvtop .modoed{margin-left:auto;padding:8px 14px;font-size:14px}.cvtop .modoed.on{background:#e1be78;color:#1a1409;border-color:#e1be78}.tb button[title=Borrar]{color:#d9776a}
+.texui{margin-top:10px}.texui .seg{margin:6px 0}
 
 </style>
 </head>
@@ -594,7 +595,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.10.2';
+const VERSION = '0.10.3';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -882,8 +883,14 @@ const Atlas = {
   /* ---- terreno ---- */
   renderTerreno() {
     const { TW, TH } = this, N = TW * TH, st = ESTILOS[S.mapa.estilo] || ESTILOS.pergamino;
-    const cv = (img) => { const c = document.createElement('canvas'); c.width = TW; c.height = TH; const x = c.getContext('2d'); if (img) { const r = Math.max(TW / img.width, TH / img.height); const w = img.width * r, hh = img.height * r; x.drawImage(img, (TW - w) / 2, (TH - hh) / 2, w, hh); } return x.getImageData(0, 0, TW, TH).data; };
-    const papel = cv(this._papelImg || ASSETS._paper), ocean = this._oceanoImg ? cv(this._oceanoImg) : null;
+    const cv = (img, cfg) => { const c = document.createElement('canvas'); c.width = TW; c.height = TH; const x = c.getContext('2d'); cfg = cfg || {};
+      if (img && cfg.modo === 'repetir') {
+        let src = img, sw = img.width, sh2 = img.height, tw = Math.max(40, TW * (cfg.esc || 30) / 100);
+        if (cfg.espejo) { const m = document.createElement('canvas'); m.width = sw * 2; m.height = sh2 * 2; const mx = m.getContext('2d'); mx.drawImage(img, 0, 0); mx.save(); mx.translate(sw * 2, 0); mx.scale(-1, 1); mx.drawImage(img, 0, 0); mx.restore(); mx.save(); mx.translate(0, sh2 * 2); mx.scale(1, -1); mx.drawImage(img, 0, 0); mx.restore(); mx.save(); mx.translate(sw * 2, sh2 * 2); mx.scale(-1, -1); mx.drawImage(img, 0, 0); mx.restore(); src = m; tw *= 2; }
+        const th = tw * src.height / src.width; for (let yy = 0; yy < TH; yy += th - .5) for (let xx = 0; xx < TW; xx += tw - .5) x.drawImage(src, xx, yy, tw, th);
+      } else if (img) { const r = Math.max(TW / img.width, TH / img.height) * (cfg.zoom || 100) / 100; const w = img.width * r, hh = img.height * r; x.drawImage(img, (TW - w) / 2, (TH - hh) / 2, w, hh); }
+      return x.getImageData(0, 0, TW, TH).data; };
+    const tx = S.mapa.tex || {}, papel = cv(this._papelImg || ASSETS._paper, tx.papel), ocean = this._oceanoImg ? cv(this._oceanoImg, tx.oceano) : null;
     const lc = document.createElement('canvas'); lc.width = TW; lc.height = TH; const lx = lc.getContext('2d'); lx.imageSmoothingQuality = 'high'; lx.drawImage(this.landC, 0, 0, TW, TH);
     const ld = lx.getImageData(0, 0, TW, TH).data, a = new Float32Array(N); for (let i = 0; i < N; i++) a[i] = ld[i * 4 + 3] / 255;
     const soft = boxBlur(a, TW, TH, 3, 2), nz = ruido(TW, TH), land = new Float32Array(N);
@@ -1305,7 +1312,13 @@ const Atlas = {
   estiloUI() {
     const m = S.mapa;
     const subir = (clave, tit) => h('div', { style: { marginTop: '8px' } }, h('div', { class: 'lab' }, tit), h('div', { style: { display: 'flex', gap: '6px' } }, h('label', { class: 'btn sm' }, 'Elegir imagen', h('input', { type: 'file', accept: 'image/*', class: 'hide', onchange: async e => { const f = e.target.files[0]; if (!f) return; m[clave] = await achicarImagen(f, 2000); await this.cargarTexturas(); this.terrDirty = true; this.confirmar(); this.pedirDibujo(); this.panel(); } })), m[clave] ? h('button', { class: 'btn sm', onclick: async () => { m[clave] = ''; await this.cargarTexturas(); this.terrDirty = true; this.confirmar(); this.pedirDibujo(); this.panel(); } }, 'Quitar') : null));
-    return h('div', {}, h('div', { class: 'lab' }, 'Estilo'), h('div', { class: 'seg' }, Object.entries(ESTILOS).map(([k, v]) => h('button', { class: m.estilo === k ? 'on' : '', onclick: () => { m.estilo = k; this.terrDirty = true; this.confirmar(); this.pedirDibujo(); this.panel(); } }, v.nombre))), subir('papel', 'Textura de papel o tierra (propia)'), subir('oceano', 'Textura de océano (propia)'));
+    const texUI = (clave, tit) => {
+      const c = (m.tex = m.tex || {})[clave] = (m.tex || {})[clave] || { modo: 'cubrir' }, cambiar = (o) => { Object.assign(c, o); this.terrDirty = true; this.confirmar(); this.pedirDibujo(); this.panel(); };
+      const sl = (lab, val, min, max, st, fn) => h('div', {}, h('label', { class: 'lab' }, lab + ' · ' + val + '%'), h('input', { type: 'range', min, max, step: st, value: val, oninput: e => { e.target.previousSibling.textContent = lab + ' · ' + e.target.value + '%'; }, onchange: e => fn(+e.target.value) }));
+      return h('div', { class: 'texui' }, h('div', { class: 'lab' }, tit), h('div', { class: 'seg' }, [['cubrir', 'Ajustar'], ['repetir', 'Repetir']].map(([v, n]) => h('button', { class: (c.modo || 'cubrir') === v ? 'on' : '', onclick: () => cambiar({ modo: v }) }, n))),
+        c.modo === 'repetir' ? [sl('Tamaño de cada loseta (del ancho del mapa)', c.esc || 30, 5, 100, 1, v => cambiar({ esc: v })), h('label', { class: 'lab f chk' }, h('input', { type: 'checkbox', checked: !!c.espejo, onchange: e => cambiar({ espejo: e.target.checked }) }), ' Espejar bordes (sin costuras)')] : sl('Zoom de la imagen', c.zoom || 100, 100, 400, 5, v => cambiar({ zoom: v })));
+    };
+    return h('div', {}, h('div', { class: 'lab' }, 'Estilo'), h('div', { class: 'seg' }, Object.entries(ESTILOS).map(([k, v]) => h('button', { class: m.estilo === k ? 'on' : '', onclick: () => { m.estilo = k; this.terrDirty = true; this.confirmar(); this.pedirDibujo(); this.panel(); } }, v.nombre))), texUI('papel', m.papel ? 'Fondo de tierra · tu imagen' : 'Fondo de tierra · papel del pack'), subir('papel', 'Textura de papel o tierra (propia)'), m.oceano ? texUI('oceano', 'Fondo de océano') : null, subir('oceano', 'Textura de océano (propia)'));
   },
   islaUI() {
     return h('div', {}, h('div', { class: 'lab' }, 'Agregar una forma de tierra del pack'), h('div', { class: 'pal' }, Object.values(ASSETS._isl).map(i => h('button', { onclick: () => this.agregarIsla(i.id), title: i.id }, h('img', { src: i.src, style: { filter: 'invert(.75)' } })))));
