@@ -594,7 +594,7 @@ function estadoVacio(nombre, abrev) {
     mapa: { w: 2400, h: 1500, estilo: 'pergamino', islas: [], estampas: [], rutas: [], pines: [], niebla: [], etiquetas: [], papel: '', oceano: '', tierra: '' },
     trans: [], ignoradas: [], ajustes: {}, tiempo: t };
 }
-const VERSION = '0.10.1';
+const VERSION = '0.10.2';
 function estadoInicial() {
   const e = clonar(SEED);
   return { v: 1, conHojas: true, campana: { nombre: 'Los Siete Reinos', abrev: 'L7R' }, ses: 6, modo: 'dm',
@@ -954,16 +954,17 @@ const Atlas = {
     if (r.pts.length < 2) return;
     const sel = this.sel?.tipo === 'ruta' && this.sel.id === r.id, k = viaje ? 1 : 1;
     c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
-    const camino = () => { c.beginPath(); c.moveTo(...r.pts[0]); for (let i = 1; i < r.pts.length - 1; i++) { const mx = (r.pts[i][0] + r.pts[i + 1][0]) / 2, my = (r.pts[i][1] + r.pts[i + 1][1]) / 2; c.quadraticCurveTo(r.pts[i][0], r.pts[i][1], mx, my); } c.lineTo(...r.pts[r.pts.length - 1]); };
+    const camino = () => { c.beginPath(); c.moveTo(...r.pts[0]); for (const b of tramos(r)) c.bezierCurveTo(b[1][0], b[1][1], b[2][0], b[2][1], b[3][0], b[3][1]); };
     const fut = (r.sesion || 1) > S.ses && esDM();
     if (r.tipo === 'rio') { camino(); c.strokeStyle = '#3d6a84'; c.lineWidth = 7; c.stroke(); camino(); c.strokeStyle = '#8fb8c9'; c.lineWidth = 3; c.stroke(); }
     else if (r.tipo === 'camino') { camino(); c.strokeStyle = 'rgba(80,45,30,.75)'; c.lineWidth = 3.2; c.setLineDash([9, 7]); c.stroke(); }
     else if (r.tipo === 'frontera') { camino(); c.strokeStyle = 'rgba(110,40,30,.8)'; c.lineWidth = 3; c.setLineDash([2, 8, 14, 8]); c.stroke(); }
     else if (r.tipo === 'futuro') { camino(); c.strokeStyle = 'rgba(70,90,120,.7)'; c.lineWidth = 3.4; c.setLineDash([3, 9]); c.stroke(); }
     else { camino(); c.strokeStyle = 'rgba(30,15,10,.55)'; c.lineWidth = 8; c.stroke(); camino(); c.strokeStyle = fut ? 'rgba(180,70,50,.4)' : '#b5362a'; c.lineWidth = 4.2; c.setLineDash([12, 8]); c.stroke(); c.setLineDash([]);
-      const a = r.pts[r.pts.length - 1], b = r.pts[r.pts.length - 2], ang = Math.atan2(a[1] - b[1], a[0] - b[0]); c.translate(a[0], a[1]); c.rotate(ang); c.fillStyle = fut ? 'rgba(180,70,50,.4)' : '#b5362a'; c.beginPath(); c.moveTo(0, 0); c.lineTo(-20, -10); c.lineTo(-20, 10); c.fill(); }
+      const tl = tramos(r).pop(), a = tl[3], b = Math.hypot(a[0] - tl[2][0], a[1] - tl[2][1]) > 1 ? tl[2] : tl[0], ang = Math.atan2(a[1] - b[1], a[0] - b[0]); c.translate(a[0], a[1]); c.rotate(ang); c.fillStyle = fut ? 'rgba(180,70,50,.4)' : '#b5362a'; c.beginPath(); c.moveTo(0, 0); c.lineTo(-20, -10); c.lineTo(-20, 10); c.fill(); }
     c.restore();
-    if (sel && !this.exportando) { c.save(); for (const p of r.pts) { c.beginPath(); c.arc(p[0], p[1], 9 / this.view.k, 0, 7); c.fillStyle = '#f2d493'; c.fill(); c.strokeStyle = '#1a1409'; c.lineWidth = 2 / this.view.k; c.stroke(); } c.restore(); }
+    if (sel && !this.exportando && this.puedeEditar()) { c.save(); const k = this.view.k, nd = this.nodo && this.nodo.id === r.id ? this.nodo.i : -1;
+      r.pts.forEach((p, i) => { const on = i === nd, rad = (on ? 12 : 9) / k; c.beginPath(); if (p[2]) c.rect(p[0] - rad, p[1] - rad, rad * 2, rad * 2); else c.arc(p[0], p[1], rad, 0, 7); c.fillStyle = on ? '#e1be78' : '#f2d493'; c.fill(); c.strokeStyle = on ? '#fff' : '#1a1409'; c.lineWidth = (on ? 3 : 2) / k; c.stroke(); }); c.restore(); }
   },
   dibujarNiebla(c, dm) {
     const m = S.mapa, FW = 600, FH = 375; if (!this._fog) { this._fog = document.createElement('canvas'); this._fog.width = FW; this._fog.height = FH; }
@@ -1012,7 +1013,7 @@ const Atlas = {
     if (this.capas.pines && !this.bloq('pines')) for (const p of [...m.pines].reverse()) { if (!this.visiblePin(p)) continue; const w = p.w || 60; if (Math.abs(wx - p.x) < w * .55 * sl && wy < p.y + 26 * sl && wy > p.y - w * .9 * sl) return { tipo: 'pin', id: p.id }; }
     if (dm && this.capas.etiquetas && !this.bloq('etiquetas')) for (const t of [...m.etiquetas].reverse()) { if (Math.abs(wx - t.x) < t.txt.length * t.sz * .3 && Math.abs(wy - t.y) < t.sz * .7) return { tipo: 'etiqueta', id: t.id }; }
     if (dm && this.tool === 'niebla' && !this.bloq('niebla')) for (const d of m.niebla) if ((wx - d.x) ** 2 + (wy - d.y) ** 2 < (14 * sl / k) ** 2) return { tipo: 'niebla', id: d.id };
-    for (const r of [...m.rutas].reverse()) { const ck = r.tipo === 'viaje' ? 'viaje' : 'rutas'; if (!this.capas[ck] || this.bloq(ck)) continue; if (!dm && (r.sesion || 1) > S.ses) continue; for (let i = 1; i < r.pts.length; i++) if (distSeg(wx, wy, r.pts[i - 1], r.pts[i]) < 10 * sl / k) return { tipo: 'ruta', id: r.id }; }
+    for (const r of [...m.rutas].reverse()) { const ck = r.tipo === 'viaje' ? 'viaje' : 'rutas'; if (!this.capas[ck] || this.bloq(ck)) continue; if (!dm && (r.sesion || 1) > S.ses) continue; if (cercaDeCurva(r, wx, wy, 10 * sl / k)) return { tipo: 'ruta', id: r.id }; }
     if (dm && this.capas.relieve && !this.bloq('relieve')) for (const s of [...m.estampas].sort((a, b) => b.y - a.y)) { const sp = SPR[s.s], hh = s.w * sp.h / sp.w; if (Math.abs(wx - s.x) < s.w / 2 && wy < s.y && wy > s.y - hh) return { tipo: 'estampa', id: s.id }; }
     return null;
   },
@@ -1060,7 +1061,8 @@ const Atlas = {
   },
   fin(rutaTerminada = true) {
     const t = this.tmp; if (!t?.ruta) return; this.tmp = null;
-    if (t.ruta.length >= 2) { const r = { id: uid(), tipo: this.opt.rutaTipo, nombre: '', sesion: this.opt.rutaTipo === 'viaje' ? S.ses : 1, pts: t.ruta.map(p => [Math.round(p[0]), Math.round(p[1])]) }; S.mapa.rutas.push(r); this.sel = { tipo: 'ruta', id: r.id }; this.confirmar(); }
+    if (t.edit) { const r0 = S.mapa.rutas.find(q => q.id === t.edit); if (r0 && t.ruta.length >= 2) { r0.pts = t.ruta.map(p => p[2] ? [Math.round(p[0]), Math.round(p[1]), 1] : [Math.round(p[0]), Math.round(p[1])]); this.sel = { tipo: 'ruta', id: r0.id }; this.confirmar(); } this.tool = 'sel'; this.barra(); }
+    else if (t.ruta.length >= 2) { const r = { id: uid(), tipo: this.opt.rutaTipo, nombre: '', sesion: this.opt.rutaTipo === 'viaje' ? S.ses : 1, pts: t.ruta.map(p => [Math.round(p[0]), Math.round(p[1])]) }; S.mapa.rutas.push(r); this.sel = { tipo: 'ruta', id: r.id }; this.confirmar(); }
     this.pedirDibujo(); this.panel();
   },
   bind() {
@@ -1080,6 +1082,13 @@ const Atlas = {
       this.mouse = [wx, wy];
       { const cp = this.capaDeTool(t); if (dm && cp && (this.bloq(cp) || !this.capas[cp])) { toast('La capa «' + CAPAS_N[cp] + '» está ' + (this.bloq(cp) ? 'bloqueada' : 'oculta') + ': activala en el panel Capas'); this.toque = null; return; } }
       if (!dm || t === 'sel' || e.button === 1 || e.shiftKey && t === 'sel') {
+        const rs0 = this.sel?.tipo === 'ruta' && dm && e.button !== 1 && this.objeto(this.sel);
+        if (rs0) {
+          const tol = 12 * (this.slop || 1) / this.view.k, i0 = rs0.pts.findIndex(p => Math.hypot(p[0] - wx, p[1] - wy) < tol);
+          if (i0 >= 0) { if (e.altKey) { this.quitarNodo(rs0, i0); return; } this.nodo = { id: rs0.id, i: i0 }; this.drag = { tipo: 'vertice', r: rs0, i: i0, sx, sy, armado: false, movido: false }; this.panel(); this.pedirDibujo(); return; }
+          const cc = cercaDeCurva(rs0, wx, wy, tol * .8);
+          if (cc) { rs0.pts.splice(cc.seg + 1, 0, [Math.round(wx), Math.round(wy)]); this.nodo = { id: rs0.id, i: cc.seg + 1 }; this.drag = { tipo: 'vertice', r: rs0, i: cc.seg + 1, sx, sy, armado: true, movido: true }; this.panel(); this.pedirDibujo(); return; }
+        }
         const h = this.hit(wx, wy);
         if (h && e.button !== 1) {
           // en rutas seleccionadas, arrastrar un vértice
@@ -1110,8 +1119,8 @@ const Atlas = {
       if (!d) { if (['tierra', 'mar', 'estampa', 'niebla', 'ruta', 'borrar'].includes(this.tool)) this.pedirDibujo(); return; }
       if (d.tipo === 'pan') { this.view.x = d.vx + p[0] - d.sx; this.view.y = d.vy + p[1] - d.sy; d.hist.push([performance.now(), p[0], p[1]]); if (d.hist.length > 6) d.hist.shift(); }
       else if (d.tipo === 'mover') { const o = this.objeto(this.sel); o.x = wx - d.dx; o.y = wy - d.dy; d.movido = true; }
-      else if (d.tipo === 'ruta') { const o = this.objeto(this.sel); o.pts = d.copia.map(q => [q[0] + wx - d.ox, q[1] + wy - d.oy]); d.movido = true; }
-      else if (d.tipo === 'vertice') { d.r.pts[d.i] = [wx, wy]; d.movido = true; }
+      else if (d.tipo === 'ruta') { const o = this.objeto(this.sel); o.pts = d.copia.map(q => [q[0] + wx - d.ox, q[1] + wy - d.oy, ...q.slice(2)]); d.movido = true; }
+      else if (d.tipo === 'vertice') { d.r.pts[d.i] = d.r.pts[d.i][2] ? [wx, wy, 1] : [wx, wy]; d.movido = true; }
       else if (d.tipo === 'pintar') this.pintar(wx, wy, this.tool === 'mar');
       else if (d.tipo === 'borrar') this.borrarEn(wx, wy);
       else if (d.tipo === 'disp') { if (Math.hypot(wx - d.last[0], wy - d.last[1]) > this.opt.rad * .45) { this.dispersar(wx, wy); d.last = [wx, wy]; d.movido = true; } }
@@ -1223,7 +1232,10 @@ const Atlas = {
       p.append(h('h3', {}, 'Ruta'), h('label', { class: 'lab f' }, 'Nombre'), h('input', { type: 'text', value: sel.nombre || '', onchange: ev => { sel.nombre = ev.target.value; this.confirmar(); } }),
         h('label', { class: 'lab f' }, 'Tipo'), h('select', { onchange: ev => { sel.tipo = ev.target.value; this.confirmar(); this.pedirDibujo(); this.panel(); } }, [['viaje', 'Viaje del grupo'], ['camino', 'Camino'], ['rio', 'Río'], ['frontera', 'Frontera'], ['futuro', 'Ruta posible']].map(([v, n]) => h('option', { value: v, selected: sel.tipo === v }, n))),
         h('label', { class: 'lab f' }, 'Visible desde la sesión'), h('input', { type: 'number', min: 1, max: 99, value: sel.sesion || 1, onchange: ev => { sel.sesion = +ev.target.value; this.confirmar(); this.pedirDibujo(); } }),
-        h('p', { class: 'empty' }, 'Arrastrá los puntos para cambiar el trazo. Alt + clic sobre un punto lo quita.'), h('button', { class: 'btn peligro', onclick: () => this.borrarSel() }, 'Borrar'));
+        h('label', { class: 'lab f' }, 'Forma'), h('div', { class: 'seg' }, [['curva', 'Curva'], ['recta', 'Recta']].map(([v, n]) => h('button', { class: (sel.forma || 'curva') === v ? 'on' : '', onclick: () => { sel.forma = v === 'recta' ? 'recta' : undefined; this.confirmar(); this.pedirDibujo(); this.panel(); } }, n))),
+        this.nodoUI(sel),
+        h('p', { class: 'empty' }, 'Arrastrá un nodo para moverlo. Tocá la línea para agregar un nodo nuevo ahí mismo. Alt + clic o Supr sobre un nodo lo quita.'),
+        h('div', { style: { marginTop: '14px', display: 'flex', gap: '8px', flexWrap: 'wrap' } }, h('button', { class: 'btn', onclick: () => this.prolongar(sel) }, 'Prolongar'), h('button', { class: 'btn', onclick: () => { sel.pts.reverse(); this.nodo = null; this.confirmar(); this.pedirDibujo(); this.panel(); } }, 'Invertir sentido'), h('button', { class: 'btn peligro', onclick: () => this.borrarSel() }, 'Borrar ruta')));
       return;
     }
     if (sel && this.sel.tipo === 'niebla') {
@@ -1303,6 +1315,13 @@ const Atlas = {
     x.globalCompositeOperation = 'source-over'; x.drawImage(blancoDe(i.img), cx / 2 - w / 2, cy / 2 - hh / 2, w, hh); this.landData = null; S.mapa.tierra = this.landC.toDataURL('image/png'); this.terrDirty = true; this.confirmar(); this.pedirDibujo(); toast('Forma agregada: movela repintando o borrando con los pinceles');
   },
   async cargarTexturas() { this._papelImg = S.mapa.papel ? await cargarImg(S.mapa.papel) : null; this._oceanoImg = S.mapa.oceano ? await cargarImg(S.mapa.oceano) : null; },
+  nodoUI(r) {
+    const n = this.nodo && this.nodo.id === r.id && this.nodo.i < r.pts.length ? this.nodo.i : -1; if (n < 0) return h('p', { class: 'empty' }, r.pts.length + ' nodos · tocá uno para elegirlo');
+    const p = r.pts[n];
+    return h('div', { class: 'nodoui' }, h('div', { class: 'lab' }, 'Nodo ' + (n + 1) + ' de ' + r.pts.length), h('div', { class: 'seg' }, [['suave', 'Suave'], ['esq', 'Esquina']].map(([v, nm]) => h('button', { class: (p[2] ? 'esq' : 'suave') === v ? 'on' : '', onclick: () => { r.pts[n] = v === 'esq' ? [p[0], p[1], 1] : [p[0], p[1]]; this.confirmar(); this.pedirDibujo(); this.panel(); } }, nm))), h('button', { class: 'btn peligro', style: { marginTop: '8px' }, onclick: () => this.quitarNodo(r, n) }, 'Quitar nodo'));
+  },
+  quitarNodo(r, i) { if (r.pts.length <= 2) { toast('Una ruta necesita al menos 2 nodos: usá Borrar para quitarla entera'); return; } r.pts.splice(i, 1); this.nodo = { id: r.id, i: Math.min(i, r.pts.length - 1) }; this.confirmar(); this.panel(); this.pedirDibujo(); },
+  prolongar(r) { this.tool = 'ruta'; this.tmp = { ruta: r.pts.map(p => [...p]), edit: r.id }; this.opt.rutaTipo = r.tipo; this.barra(); this.panel(); this.tope(); this.pedirDibujo(); toast('Un clic por nodo nuevo; doble clic para terminar'); },
   borrarSel() { const s = this.sel; if (!s) return; const m = S.mapa, l = ({ pin: 'pines', estampa: 'estampas', etiqueta: 'etiquetas', ruta: 'rutas', niebla: 'niebla' })[s.tipo]; m[l] = m[l].filter(o => o.id !== s.id); this.sel = null; this.confirmar(); this.pedirDibujo(); this.panel(); },
   exportarPNG() {
     const c = document.createElement('canvas'); c.width = this.W; c.height = this.H; this.exportando = true; this.dibujar(c.getContext('2d')); this.exportando = false;
@@ -1312,13 +1331,25 @@ const Atlas = {
     if (!this.cv || !this.puedeEditar() || e.target.closest('input,textarea,select')) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); this.restaurar(e.shiftKey ? this.hi + 1 : this.hi - 1); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); this.restaurar(this.hi + 1); }
-    else if ((e.key === 'Delete' || e.key === 'Backspace') && this.sel) { e.preventDefault(); this.borrarSel(); }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && this.sel) { e.preventDefault(); const r = this.sel.tipo === 'ruta' && this.objeto(this.sel); if (r && this.nodo && this.nodo.id === r.id && this.nodo.i < r.pts.length) this.quitarNodo(r, this.nodo.i); else this.borrarSel(); }
     else if (e.key === 'Escape') { this.tmp = null; this.sel = null; this.panel(); this.pedirDibujo(); }
     else if (e.key === 'Enter' && this.tmp?.ruta) this.fin();
   },
   /* lugar del mapa de una entidad (para "Ver en el atlas") */
   pinDe(entId) { return S.mapa?.pines.find(p => p.ent === entId); }
 };
+/* ruta = nodos que la curva atraviesa (Catmull-Rom → Bézier). nodo[2]=1: esquina; r.forma==='recta': todo recto */
+function tramos(r) {
+  const P = r.pts, n = P.length, rec = r.forma === 'recta', out = [];
+  const T = i => { if (rec || P[i][2]) return [0, 0]; const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)]; return [(b[0] - a[0]) / 6, (b[1] - a[1]) / 6]; };
+  for (let i = 0; i < n - 1; i++) { const t0 = T(i), t1 = T(i + 1); out.push([P[i], [P[i][0] + t0[0], P[i][1] + t0[1]], [P[i + 1][0] - t1[0], P[i + 1][1] - t1[1]], P[i + 1]]); }
+  return out;
+}
+function cercaDeCurva(r, wx, wy, tol) {
+  let mejor = null; const ts = tramos(r);
+  ts.forEach((b, j) => { let prev = b[0]; for (let q = 1; q <= 14; q++) { const t = q / 14, u = 1 - t, x = u * u * u * b[0][0] + 3 * u * u * t * b[1][0] + 3 * u * t * t * b[2][0] + t * t * t * b[3][0], y = u * u * u * b[0][1] + 3 * u * u * t * b[1][1] + 3 * u * t * t * b[2][1] + t * t * t * b[3][1]; const d = distSeg(wx, wy, prev, [x, y]); if (d < tol && (!mejor || d < mejor.d)) mejor = { seg: j, d }; prev = [x, y]; } });
+  return mejor;
+}
 function blancoDe(img) { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const x = c.getContext('2d'); x.drawImage(img, 0, 0); const d = x.getImageData(0, 0, c.width, c.height); for (let i = 0; i < d.data.length; i += 4) { const v = d.data[i]; d.data[i] = d.data[i + 1] = d.data[i + 2] = 255; d.data[i + 3] = v; } x.putImageData(d, 0, 0); return c; }
 function distSeg(px, py, a, b) { const dx = b[0] - a[0], dy = b[1] - a[1], l = dx * dx + dy * dy || 1, t = clamp(((px - a[0]) * dx + (py - a[1]) * dy) / l, 0, 1); return Math.hypot(px - (a[0] + t * dx), py - (a[1] + t * dy)); }
 async function achicarImagen(file, max) {
